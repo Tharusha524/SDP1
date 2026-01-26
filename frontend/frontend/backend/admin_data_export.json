@@ -1,0 +1,44 @@
+{
+  "admins": [
+    {
+      "AdminID": "A-0001",
+      "Name": "Sanduni Silva",
+      "Email": "sanduni123@gmail.com",
+      "Password": "1234",
+      "CreatedAt": "2026-01-20 18:02:53",
+      "UpdatedAt": "2026-01-24 16:41:54"
+    },
+    {
+      "AdminID": "A-0002",
+      "Name": "Kamal Perera",
+      "Email": "thilakarathna56@gmail.com",
+      "Password": "1234",
+      "CreatedAt": "2026-01-20 18:02:53",
+      "UpdatedAt": "2026-01-24 16:41:54"
+    }
+  ],
+  "admin_users": [
+    {
+      "id": 1,
+      "username": "admin@marukawa.com",
+      "password": "admin123",
+      "role": "admin"
+    }
+  ],
+  "tables": [
+    "admin",
+    "customer",
+    "inventory",
+    "notification",
+    "orderitem",
+    "orders",
+    "product",
+    "staff",
+    "storekeeper",
+    "task",
+    "users",
+    "vw_inventorystatus",
+    "vw_orderdetails",
+    "vw_staffworkload"
+  ]
+}

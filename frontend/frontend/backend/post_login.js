@@ -1,0 +1,33 @@
+const http = require('http');
+
+const data = JSON.stringify({ email: 'kasun@cementlk.com', password: '1234' });
+
+const options = {
+  hostname: 'localhost',
+  port: 5000,
+  path: '/api/auth/login',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(data)
+  }
+};
+
+const req = http.request(options, (res) => {
+  let body = '';
+  res.on('data', (chunk) => body += chunk);
+  res.on('end', () => {
+    console.log('Status:', res.statusCode);
+    console.log('Headers:', res.headers);
+    console.log('Body:', body);
+    process.exit(0);
+  });
+});
+
+req.on('error', (err) => {
+  console.error('Request error:', err.message);
+  process.exit(1);
+});
+
+req.write(data);
+req.end();
