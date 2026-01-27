@@ -4,6 +4,7 @@ import { AnimatePresence } from "framer-motion";
 import LoginPage from "./LoginPage.jsx";
 import Register from "./Register.jsx";
 import VerifyEmail from "./VerifyEmail.jsx";
+import ResetPassword from "./ResetPassword.jsx";
 import LandingPage from "./LandingPage.jsx";
 import ForgotPassword from "./ForgotPassword.js";
 import PlaceOrder from "./PlaceOrder.js";
@@ -31,6 +32,7 @@ function AnimatedRoutes() {
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Customer Journey */}
         <Route path="/customer/catalog" element={<CatalogForCustomer />} />

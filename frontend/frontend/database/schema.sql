@@ -22,16 +22,19 @@ CREATE TABLE Products (
 CREATE TABLE Orders (
     id VARCHAR(50) PRIMARY KEY DEFAULT CONCAT('ORD-', LPAD(FLOOR(RAND() * 10000), 4, '0')),
     user_id VARCHAR(50),
-    total DECIMAL(10,2) NOT NULL,
     status ENUM('pending', 'completed', 'cancelled') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES Users(id)
 );
 
--- OrderProducts Table
+-- OrderProducts Table (Junction table with proper structure)
 CREATE TABLE OrderProducts (
     order_id VARCHAR(50),
     product_id VARCHAR(50),
-    FOREIGN KEY (order_id) REFERENCES Orders(id),
+    quantity INT NOT NULL DEFAULT 1,
+    price_at_purchase DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (order_id, product_id),
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES Products(id)
 );
 

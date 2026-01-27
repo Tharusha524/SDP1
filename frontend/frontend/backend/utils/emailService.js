@@ -1,11 +1,18 @@
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const nodemailer = require('nodemailer');
 
-// Configure email transporter
+console.log('Email Service Configuration:');
+console.log('EMAIL_USER:', process.env.EMAIL_USER);
+console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '****' + process.env.EMAIL_PASSWORD.slice(-4) : 'NOT SET');
+
+// Configure email transporter for Gmail
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // You can use 'outlook', 'yahoo', etc.
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // Use SSL
   auth: {
-    user: process.env.EMAIL_USER, // Your email
-    pass: process.env.EMAIL_PASSWORD // Your app password
+    user: process.env.EMAIL_USER || 'marukawacements@gmail.com',
+    pass: process.env.EMAIL_PASSWORD || 'tacmfvpwdbhrjnfw'
   }
 });
 
@@ -17,7 +24,7 @@ const generateOTP = () => {
 // Send OTP email
 const sendOTPEmail = async (email, otp, name) => {
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: `"Marukawa Cement Works" <${process.env.EMAIL_USER || 'marukawacements@gmail.com'}>`,
     to: email,
     subject: 'Verify Your Marukawa Account - OTP',
     html: `
@@ -125,7 +132,57 @@ const sendOTPEmail = async (email, otp, name) => {
   }
 };
 
+// Send Password Reset OTP email
+const sendPasswordResetOTP = async (email, otp, name) => {
+  const mailOptions = {
+    from: `"Marukawa Cement Works" <${process.env.EMAIL_USER || 'marukawacements@gmail.com'}>`,
+    to: email,
+    subject: 'Reset Your Marukawa Password',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+          .header { background: #111827; padding: 30px; text-align: center; color: white; }
+          .content { padding: 40px 30px; text-align: center; }
+          .otp-box { background: #f8f9fa; border: 2px dashed #111827; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #111827; letter-spacing: 8px; margin: 10px 0; }
+          .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #777; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header"><h1>Marukawa Cement Works</h1></div>
+          <div class="content">
+            <h2>Password Reset Request</h2>
+            <p>Hello ${name},</p>
+            <p>We received a request to reset your password. Use the code below to complete the process:</p>
+            <div class="otp-box">
+              <div class="otp-code">${otp}</div>
+            </div>
+            <p>This code expires in 10 minutes.</p>
+          </div>
+          <div class="footer"><p>&copy; ${new Date().getFullYear()} Marukawa Cement Works</p></div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Reset OTP sent successfully to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('Error sending Reset OTP email:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   generateOTP,
-  sendOTPEmail
+  sendOTPEmail,
+  sendPasswordResetOTP
 };

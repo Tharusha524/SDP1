@@ -32,8 +32,8 @@ function Register() {
     setLoading(true);
     try {
       await axios.post(`${API_URL}/auth/register`, formData);
-      alert('Registration successful! Please login.');
-      navigate('/login');
+      alert('Registration successful! Redirecting to verification...');
+      setTimeout(() => navigate('/verify-email', { state: { email: formData.email } }), 1000);
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import styled, { createGlobalStyle } from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaPlus, FaEdit, FaTrash, FaImage, FaTimes, FaCloudUploadAlt } from "react-icons/fa";
+import { FaPlus, FaEdit, FaTrash, FaCloudUploadAlt, FaSignOutAlt, FaArrowLeft } from "react-icons/fa";
+import { useNavigate } from 'react-router-dom';
 
 // --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
@@ -289,17 +290,39 @@ const ActionIconButton = styled.button`
   }
 `;
 
-// --- Sample Data ---
-const INITIAL_DATA = [
-  { id: 'PRD-2001', name: 'Flower Vases', price: '5000', desc: 'Elegant decorative vases for home and office', image: 'https://images.unsplash.com/photo-1581783898377-1c85bf937427?q=80&w=200' },
-  { id: 'PRD-2002', name: 'Sofa', price: '12,000', desc: 'Comfortable sofa for living room', image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=200' },
-];
-
 export default function CatalogManage() {
-  const [products, setProducts] = useState(INITIAL_DATA);
-  const [formData, setFormData] = useState({ id: '', name: '', price: '', desc: '', image: '' });
+  const navigate = useNavigate();
+  const [products, setProducts] = useState([]);
+  const [formData, setFormData] = useState({ id: '', name: '', price: '', description: '', image: '' });
   const [preview, setPreview] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch products on component mount
+  useEffect(() => {
+    console.log('🔄 CatalogManage component mounted - fetching products...');
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/products');
+      const data = await response.json();
+      if (data.success) {
+        setProducts(data.products);
+        console.log(`✅ Loaded ${data.products.length} products from database`);
+      } else {
+        console.error('Failed to fetch products:', data);
+        alert('Failed to fetch products');
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      alert('Cannot connect to backend server. Please ensure it is running on port 5000.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -319,40 +342,132 @@ export default function CatalogManage() {
   };
 
   const resetForm = () => {
-    setFormData({ id: '', name: '', price: '', desc: '', image: '' });
+    setFormData({ id: '', name: '', price: '', description: '',  image: '' });
     setPreview(null);
     setIsEditing(false);
   };
 
-  const handleAddProduct = (e) => {
+  const handleAddProduct = async (e) => {
     e.preventDefault();
-    if (!formData.id || !formData.name || !formData.price) return;
-
-    if (products.some(p => p.id === formData.id)) {
-      alert("Product ID already exists!");
+    if (!formData.name || !formData.price) {
+      alert('Name and price are required!');
       return;
     }
 
-    setProducts(prev => [...prev, formData]);
-    resetForm();
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          price: parseFloat(formData.price),
+          image: formData.image
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Product created:', data.productId);
+        // Reset form first
+        resetForm();
+        // Then fetch updated product list
+        await fetchProducts();
+        // Show success message
+        alert(`✅ Product "${formData.name}" added successfully!\n\nProduct ID: ${data.productId}\n\nYour product is now visible in the catalog below.`);
+        // Scroll to the catalog table
+        setTimeout(() => {
+          const catalogSection = document.querySelector('h2:nth-of-type(2)');
+          if (catalogSection) {
+            catalogSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+      } else {
+        console.error('Server error:', data);
+        alert(`❌ Error: ${data.error || 'Unknown error occurred'}`);
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      if (error.message.includes('fetch')) {
+        alert('Cannot connect to server. Please ensure backend is running on port 5000.');
+      } else {
+        alert(`Error adding product: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditClick = (product) => {
-    setFormData(product);
-    setPreview(product.image);
+    setFormData({
+      id: product.ProductID,
+      name: product.Name,
+      price: product.Price,
+      description: product.Description || '',
+      
+      image: product.Image || ''
+    });
+    setPreview(product.Image);
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleUpdateProduct = (e) => {
+  const handleUpdateProduct = async (e) => {
     e.preventDefault();
-    setProducts(prev => prev.map(p => p.id === formData.id ? formData : p));
-    resetForm();
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/products/${formData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          price: parseFloat(formData.price),
+          image: formData.image
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert('✅ Product updated successfully! Changes reflected in the catalog.');
+        await fetchProducts();
+        resetForm();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Error updating product');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveProduct = (id) => {
-    if (window.confirm("Are you sure you want to remove this product?")) {
-      setProducts(prev => prev.filter(p => p.id !== id));
+  const handleRemoveProduct = async (id) => {
+    if (!window.confirm("⚠️ Are you sure you want to permanently delete this product?\n\nThis action cannot be undone and will remove the product from the database.")) return;
+
+    setLoading(true);
+    try {
+      console.log('Deleting product:', id);
+      const response = await fetch(`http://localhost:5000/api/products/${id}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Product deleted from database');
+        alert('✅ Product permanently deleted from database!');
+        await fetchProducts();
+      } else {
+        console.error('Delete failed:', data);
+        alert(`❌ Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert('❌ Error connecting to server. Please ensure backend is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -361,7 +476,17 @@ export default function CatalogManage() {
       <GlobalStyle />
       <PageWrapper>
         <Header>
-          <h1>Manage Product Catalog</h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '1000px', margin: '0 auto' }}>
+            <h1>Manage Product Catalog</h1>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <ActionIconButton onClick={() => navigate('/admin/dashboard')} style={{ color: '#c0a062', fontSize: '1rem' }}>
+                <FaArrowLeft /> Dashboard
+              </ActionIconButton>
+              <ActionIconButton onClick={() => navigate('/login')} style={{ color: '#c0a062', fontSize: '1rem' }}>
+                <FaSignOutAlt /> Logout
+              </ActionIconButton>
+            </div>
+          </div>
         </Header>
 
         <MainContainer>
@@ -373,17 +498,6 @@ export default function CatalogManage() {
             <h2>{isEditing ? <FaEdit /> : <FaPlus />} {isEditing ? "Edit Product" : "Add New Product"}</h2>
             <Form onSubmit={isEditing ? handleUpdateProduct : handleAddProduct}>
               <FormGroup>
-                <label>Product ID</label>
-                <Input
-                  name="id"
-                  placeholder="e.g., PRD-2003"
-                  value={formData.id}
-                  onChange={handleInputChange}
-                  disabled={isEditing}
-                  required
-                />
-              </FormGroup>
-              <FormGroup>
                 <label>Product Name</label>
                 <Input
                   name="name"
@@ -391,26 +505,31 @@ export default function CatalogManage() {
                   value={formData.name}
                   onChange={handleInputChange}
                   required
+                  disabled={loading}
                 />
               </FormGroup>
               <FormGroup>
                 <label>Price (Rs.)</label>
                 <Input
                   name="price"
+                  type="number"
+                  step="0.01"
                   placeholder="e.g., 1500"
                   value={formData.price}
                   onChange={handleInputChange}
                   required
+                  disabled={loading}
                 />
               </FormGroup>
               <FormGroup>
                 <label>Description</label>
                 <TextArea
-                  name="desc"
+                  name="description"
                   rows="3"
                   placeholder="Short description..."
-                  value={formData.desc}
+                  value={formData.description}
                   onChange={handleInputChange}
+                  disabled={loading}
                 />
               </FormGroup>
 
@@ -439,18 +558,19 @@ export default function CatalogManage() {
 
               <ButtonGroup>
                 {!isEditing ? (
-                  <Button type="submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <FaPlus /> Add Product
+                  <Button type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <FaPlus /> {loading ? 'Adding...' : 'Add Product'}
                   </Button>
                 ) : (
                   <>
-                    <Button type="submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      Update Product
+                    <Button type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      {loading ? 'Updating...' : 'Update Product'}
                     </Button>
                     <Button
                       type="button"
                       variant="danger"
                       onClick={resetForm}
+                      disabled={loading}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
@@ -468,7 +588,12 @@ export default function CatalogManage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <h2>Product Catalog</h2>
+            <h2>Product Catalog ({products.length} {products.length === 1 ? 'product' : 'products'})</h2>
+            {products.length > 0 && (
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', marginTop: '-20px', marginBottom: '20px' }}>
+                Showing all active products with edit and delete options
+              </p>
+            )}
             <TableContainer>
               <Table>
                 <thead>
@@ -481,42 +606,49 @@ export default function CatalogManage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <AnimatePresence>
-                    {products.map((product) => (
-                      <motion.tr
-                        key={product.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <td><strong>#{product.id}</strong></td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            {product.image && <img src={product.image} alt={product.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
-                            {product.name}
-                          </div>
-                        </td>
-                        <td style={{ color: '#27ae60', fontWeight: 700 }}>Rs. {product.price}</td>
-                        <td style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.5)', maxWidth: '250px' }}>{product.desc}</td>
-                        <td>
-                          <TableActions>
-                            <ActionIconButton onClick={() => handleEditClick(product)} title="Edit">
-                              <FaEdit size={18} />
-                            </ActionIconButton>
-                            <ActionIconButton variant="danger" onClick={() => handleRemoveProduct(product.id)} title="Remove">
-                              <FaTrash size={18} />
-                            </ActionIconButton>
-                          </TableActions>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
-                  {products.length === 0 && (
+                  {loading && products.length === 0 ? (
                     <tr>
-                      <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255, 255, 255, 0.3)' }}>
-                        No products found in the catalog.
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        Loading products...
                       </td>
                     </tr>
+                  ) : products.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255, 255, 255, 0.3)' }}>
+                        No products in catalog yet. Add your first product above! 👆
+                      </td>
+                    </tr>
+                  ) : (
+                    <AnimatePresence>
+                      {products.map((product) => (
+                        <motion.tr
+                          key={product.ProductID}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                        >
+                          <td><strong>#{product.ProductID}</strong></td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              {product.Image && <img src={product.Image} alt={product.Name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
+                              {product.Name}
+                            </div>
+                          </td>
+                          <td style={{ color: '#27ae60', fontWeight: 700 }}>Rs. {parseFloat(product.Price).toFixed(2)}</td>
+                          <td style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.5)', maxWidth: '250px' }}>{product.Description || 'No description'}</td>
+                          <td>
+                            <TableActions>
+                              <ActionIconButton onClick={() => handleEditClick(product)} disabled={loading} title="Edit">
+                                <FaEdit size={18} />
+                              </ActionIconButton>
+                              <ActionIconButton variant="danger" onClick={() => handleRemoveProduct(product.ProductID)} disabled={loading} title="Remove">
+                                <FaTrash size={18} />
+                              </ActionIconButton>
+                            </TableActions>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
                   )}
                 </tbody>
               </Table>

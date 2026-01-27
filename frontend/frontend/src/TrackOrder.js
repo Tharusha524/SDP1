@@ -299,7 +299,7 @@ const TrackOrder = () => {
     const newNotif = {
       id: Date.now(),
       orderId: orderId,
-      status: 'Consultation Initialized',
+      status: 'your order is pending.we will notify you once it is processed.',
       time: `${timeStr}, ${dateStr}`
     };
 

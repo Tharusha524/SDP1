@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaSearch, FaFilter, FaBars, FaTimes, FaBoxOpen, FaInfoCircle, FaPhone, FaTruck } from 'react-icons/fa';
+import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt } from 'react-icons/fa';
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
@@ -360,21 +360,21 @@ const Footer = styled.footer`
 // --- Data ---
 const PRODUCTS = [
   {
-    title: "Empire Vase",
-    price: "Reserved",
+    title: "Flower Vase",
+    price: "Rs.5500",
     desc: "Hand-blown glass with gold leaf detailing. A statement piece for executive suites.",
     img: img1,
     type: "vases"
   },
   {
-    title: "Monarch Armchair",
+    title: "Flower vase",
     price: "Rs. 12,500",
     desc: "Velvet upholstery with solid oak legs. Ergonomically designed for luxury.",
     img: img2,
     type: "chairs"
   },
   {
-    title: "Obsidian Table",
+    title: "Flower vase",
     price: "Rs. 28,000",
     desc: "Tempered smoked glass top with matte black metal frame.",
     img: img3,
@@ -388,21 +388,21 @@ const PRODUCTS = [
     type: "vases"
   },
   {
-    title: "Artistic Sculpture",
+    title: "sofa set",
     price: "Rs. 22,000",
     desc: "Contemporary abstract art piece that elevates any interior.",
     img: img5,
     type: "vases"
   },
   {
-    title: "Designer Vase",
+    title: "Table & bench",
     price: "Rs. 15,750",
     desc: "Handcrafted with intricate patterns. A true masterpiece.",
     img: img6,
     type: "vases"
   },
   {
-    title: "Premium Showpiece",
+    title: "large flower vase",
     price: "Rs. 32,500",
     desc: "Luxury decor for executive spaces. Makes a bold statement.",
     img: img7,
@@ -452,12 +452,13 @@ const CatalogForCustomer = () => {
               >
                 <SidebarCloseBtn onClick={() => setIsSidebarOpen(false)}><FaTimes /></SidebarCloseBtn>
                 <SidebarButton onClick={() => navigate('/customer/place-order')}>
-                  <FaBoxOpen /> Place Order
+                  <FaShoppingCart /> Place Order
                 </SidebarButton>
                 <SidebarButton onClick={() => navigate('/customer/track-order')}>
                   <FaTruck /> Track Order
-                </SidebarButton>
-              </Sidebar>
+                </SidebarButton>                <SidebarButton onClick={() => navigate('/login')}>
+                  <FaSignOutAlt /> Logout
+                </SidebarButton>              </Sidebar>
             </>
           )}
         </AnimatePresence>
@@ -520,7 +521,7 @@ const CatalogForCustomer = () => {
                     </ProductHeader>
                     <ProductDesc>{product.desc}</ProductDesc>
                     <ActionButton onClick={() => navigate('/customer/place-order')}>
-                      Place Order <FaBoxOpen />
+                      Place Order <FaShoppingCart />
                     </ActionButton>
                   </ProductInfo>
                 </ProductCard>

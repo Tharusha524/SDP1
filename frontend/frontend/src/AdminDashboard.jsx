@@ -437,7 +437,7 @@ const DashboardView = () => (
           { id: 'ORD-1040', name: 'Ruwan S.', item: 'Dining Table', price: 'Rs 42,000', status: 'Cancelled' }
           ].map(order => (
             <tr key={order.id}>
-              <td>#{order.id}</td>
+              <td>{order.id}</td>
               <td>{order.name}</td>
               <td>{order.item}</td>
               <td>{order.price}</td>
@@ -458,9 +458,9 @@ const OrdersView = () => (
         <tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Quantity</th><th>Status</th></tr>
       </thead>
       <tbody>
-        <tr><td>101</td><td>Kavindu Herath</td><td>Flower Vases</td><td>20</td><td><StatusChip status="Pending">Pending</StatusChip></td></tr>
-        <tr><td>102</td><td>Nisansala Gamage</td><td>Chairs</td><td>50</td><td><StatusChip status="Completed">Completed</StatusChip></td></tr>
-        <tr><td>103</td><td>Sandaruwan Perera</td><td>Sofas</td><td>2</td><td><StatusChip status="Pending">Pending</StatusChip></td></tr>
+        <tr><td>ORD-101</td><td>Kavindu Herath</td><td>Flower Vases</td><td>20</td><td><StatusChip status="Pending">Pending</StatusChip></td></tr>
+        <tr><td>ORD-102</td><td>Nisansala Gamage</td><td>Chairs</td><td>50</td><td><StatusChip status="Completed">Completed</StatusChip></td></tr>
+        <tr><td>ORD-103</td><td>Sandaruwan Perera</td><td>Sofas</td><td>2</td><td><StatusChip status="Pending">Pending</StatusChip></td></tr>
       </tbody>
     </Table>
   </ContentCard>
@@ -470,11 +470,11 @@ const StaffView = () => (
   <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
     <h3>Staff Directory</h3>
     <Table>
-      <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Contact</th><th>Status</th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Contact</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td>S01</td><td>Saman Rathnasiri</td><td>Manager</td><td>0712345678</td><td><StatusChip status="Completed">Active</StatusChip></td></tr>
-        <tr><td>S02</td><td>Harsha Thennakoon</td><td>Logistics</td><td>0723456789</td><td><StatusChip status="Completed">Active</StatusChip></td></tr>
-        <tr><td>S03</td><td>Madhura Roopasinghe</td><td>Sales</td><td>0734567890</td><td><StatusChip status="Pending">Leave</StatusChip></td></tr>
+        <tr><td>USR-0001</td><td>Saman Rathnasiri</td><td>0712345678</td><td><StatusChip status="Completed">Active</StatusChip></td></tr>
+        <tr><td>USR-0002</td><td>Harsha Thennakoon</td><td>0723456789</td><td><StatusChip status="Completed">Active</StatusChip></td></tr>
+        <tr><td>USR-0003</td><td>Madhura Roopasinghe</td><td>0734567890</td><td><StatusChip status="Pending">Leave</StatusChip></td></tr>
       </tbody>
     </Table>
   </ContentCard>
@@ -486,9 +486,9 @@ const InventoryView = () => (
     <Table>
       <thead><tr><th>ID</th><th>Material/Item</th><th>Quantity</th><th>Last Updated</th></tr></thead>
       <tbody>
-        <tr><td>INV-101</td><td>Cement</td><td>120 bags</td><td>2025-10-19</td></tr>
-        <tr><td>INV-102</td><td>Sand</td><td>10 cubes</td><td>2025-10-19</td></tr>
-        <tr><td>INV-103</td><td>Stone Powder</td><td>15 cubes</td><td>2025-10-19</td></tr>
+        <tr><td>IN-101</td><td>Cement</td><td>120 kg</td><td>2025-10-19</td></tr>
+        <tr><td>IN-102</td><td>Sand</td><td>25 kg</td><td>2025-10-19</td></tr>
+        <tr><td>IN-103</td><td>Stone Powder</td><td>28 kg</td><td>2025-10-19</td></tr>
       </tbody>
     </Table>
   </ContentCard>

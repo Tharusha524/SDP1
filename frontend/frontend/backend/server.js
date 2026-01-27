@@ -9,11 +9,20 @@ const app = express();
 
 // Enable CORS for frontend
 app.use(cors({
-	origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5004'],
+	origin: [
+		'http://localhost:3000',
+		'http://localhost:3001',
+		'http://localhost:5004',
+		'http://127.0.0.1:3000',
+		'http://127.0.0.1:3001',
+		'http://127.0.0.1:5004'
+	],
 	credentials: true
 }));
 
-app.use(express.json());
+// Increase payload size limit for base64 images (50MB)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Root route
 app.get('/', (req, res) => {

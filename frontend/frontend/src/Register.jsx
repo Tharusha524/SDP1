@@ -318,8 +318,8 @@ const Register = () => {
 
   const validateField = (name, value) => {
     let errorMsg = '';
-    
-    switch(name) {
+
+    switch (name) {
       case 'name':
         if (!value.trim()) {
           errorMsg = 'Full name is required';
@@ -327,7 +327,7 @@ const Register = () => {
           errorMsg = 'Name must be at least 3 characters';
         }
         break;
-      
+
       case 'email':
         if (!value.trim()) {
           errorMsg = 'Email is required';
@@ -335,7 +335,7 @@ const Register = () => {
           errorMsg = 'Please enter a valid email address';
         }
         break;
-      
+
       case 'contact':
         if (!value.trim()) {
           errorMsg = 'Contact number is required';
@@ -343,7 +343,7 @@ const Register = () => {
           errorMsg = 'Please enter a valid contact number';
         }
         break;
-      
+
       case 'password':
         if (!value) {
           errorMsg = 'Password is required';
@@ -353,17 +353,17 @@ const Register = () => {
           errorMsg = 'Password must include uppercase, lowercase, and number';
         }
         break;
-      
+
       case 'role':
         if (!value) {
           errorMsg = 'Please select a role';
         }
         break;
-      
+
       default:
         break;
     }
-    
+
     setValidationErrors(prev => ({ ...prev, [name]: errorMsg }));
     return errorMsg === '';
   };
@@ -384,14 +384,14 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
     // Validate all fields
     const nameValid = validateField('name', formData.name);
     const emailValid = validateField('email', formData.email);
     const contactValid = validateField('contact', formData.contact);
     const passwordValid = validateField('password', formData.password);
     const roleValid = validateField('role', formData.role);
-    
+
     setTouched({
       name: true,
       email: true,
@@ -399,11 +399,11 @@ const Register = () => {
       password: true,
       role: true
     });
-    
+
     if (!nameValid || !emailValid || !contactValid || !passwordValid || !roleValid) {
       return;
     }
-    
+
     setLoading(true);
 
     try {
@@ -419,8 +419,8 @@ const Register = () => {
 
       if (data.success) {
         setSuccess(true);
-        // Redirect to login page
-        setTimeout(() => navigate('/login'), 2000);
+        // Redirect to verification page
+        setTimeout(() => navigate('/verify-email', { state: { email: formData.email } }), 2000);
       } else {
         setError(data.message || 'Registration failed');
       }
@@ -480,7 +480,7 @@ const Register = () => {
                   <FaCheckCircle size={80} color="#111827" style={{ marginBottom: '24px' }} />
                 </motion.div>
                 <WelcomeText>Account Created</WelcomeText>
-                <SubText>Redirecting you to the portal...</SubText>
+                <SubText>Please check your email for the verification code. Redirecting you to verification...</SubText>
               </SuccessOverlay>
             )}
           </AnimatePresence>
@@ -596,7 +596,7 @@ const Register = () => {
                   }}
                 >
                   <option value="" disabled>Select Alignment</option>
-                 
+
                   <option value="customer">Customer</option>
                   <option value="staff">Operational Staff</option>
                   <option value="storekeeper">Inventory Manager</option>

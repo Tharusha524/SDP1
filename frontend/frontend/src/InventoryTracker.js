@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaExclamationTriangle, FaDollyFlatbed, FaClock, FaCheckCircle, FaChartLine, FaArrowRight } from 'react-icons/fa';
+import { FaExclamationTriangle, FaDollyFlatbed, FaClock, FaCheckCircle, FaChartLine, FaSignOutAlt } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 // --- Global Aesthetics ---
@@ -36,7 +36,7 @@ const Header = styled.div`
   margin-bottom: 60px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
 `;
 
 const TitleSection = styled.div``;
@@ -162,6 +162,29 @@ const UpdateButton = styled(motion.button)`
   }
 `;
 
+const LogoutButton = styled.button`
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3f4f6;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Manrope', sans-serif;
+
+  &:hover {
+    background: rgba(192, 160, 98, 0.15);
+    border-color: #c0a062;
+    color: #c0a062;
+    transform: translateY(-2px);
+  }
+`;
+
 const AlertToast = styled(motion.div)`
   position: fixed;
   bottom: 40px;
@@ -240,7 +263,9 @@ const InventoryTracker = () => {
                             Real-Time Tracker
                         </Title>
                     </TitleSection>
-
+                    <LogoutButton onClick={() => navigate('/login')}>
+                        <FaSignOutAlt /> Logout
+                    </LogoutButton>
                 </Header>
 
                 <AnimatePresence>

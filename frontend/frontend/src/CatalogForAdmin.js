@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaEdit, FaSearch, FaBars, FaTimes, FaBoxOpen, FaArrowLeft, FaTrash } from 'react-icons/fa';
+import { FaEdit, FaSearch, FaBars, FaTimes, FaArrowLeft, FaTrash, FaSignOutAlt } from 'react-icons/fa';
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
@@ -336,13 +336,13 @@ const ButtonGroup = styled.div`
 `;
 
 const PRODUCTS_DATA = [
-  { id: 'PRD-1001', title: "Empire Vase", price: "Reserved", desc: "Hand-blown glass with gold leaf detailing.", img: img1 },
+  { id: 'PRD-1001', title: "Flower Vase", price: "Rs.5500", desc: "Hand-blown glass with gold leaf detailing.", img: img1 },
   { id: 'PRD-1002', title: "Flower vase", price: "Rs. 12,500", desc: "Velvet upholstery with solid oak legs.", img: img2 },
   { id: 'PRD-1003', title: "Flower vase", price: "Rs. 28,000", desc: "Tempered smoked glass top.", img: img3 },
   { id: 'PRD-1004', title: "Elegant Decor Piece", price: "Rs. 18,500", desc: "Modern ceramic design with matte finish.", img: img4 },
-  { id: 'PRD-1005', title: "Artistic Sculpture", price: "Rs. 22,000", desc: "Contemporary abstract art piece.", img: img5 },
-  { id: 'PRD-1006', title: "Designer Vase", price: "Rs. 15,750", desc: "Handcrafted with intricate patterns.", img: img6 },
-  { id: 'PRD-1007', title: "Premium Showpiece", price: "Rs. 32,500", desc: "Luxury decor for executive spaces.", img: img7 },
+  { id: 'PRD-1005', title: "Sofa set", price: "Rs. 22,000", desc: "Contemporary abstract art piece.", img: img5 },
+  { id: 'PRD-1006', title: "Table & Bench", price: "Rs. 15,750", desc: "Handcrafted with intricate patterns.", img: img6 },
+  { id: 'PRD-1007', title: "Large Flower Vase", price: "Rs. 32,500", desc: "Luxury decor for executive spaces.", img: img7 },
   { id: 'PRD-1008', title: "Classic Ornament", price: "Rs. 19,900", desc: "Timeless design with elegant curves.", img: img8 },
 ];
 
@@ -374,6 +374,7 @@ const CatalogForAdmin = () => {
                 <SidebarCloseBtn onClick={() => setIsSidebarOpen(false)}><FaTimes /></SidebarCloseBtn>
                 <SidebarButton onClick={() => navigate('/admin/dashboard')}><FaArrowLeft /> Dashboard</SidebarButton>
                 <SidebarButton onClick={() => navigate('/admin/catalog-manage')}><FaEdit /> Manage Items</SidebarButton>
+                <SidebarButton onClick={() => navigate('/login')}><FaSignOutAlt /> Logout</SidebarButton>
               </Sidebar>
             </>
           )}

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaCheckCircle, FaClipboardCheck, FaArrowLeft } from 'react-icons/fa';
+import { FaBars, FaTimes, FaClipboardCheck, FaArrowLeft } from 'react-icons/fa';
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
@@ -201,13 +201,6 @@ const ProductInfo = styled.div`
   padding: 24px;
 `;
 
-const ProductHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-`;
-
 const ProductTitle = styled.h3`
   margin: 0;
   font-family: 'Playfair Display', serif;
@@ -227,41 +220,14 @@ const ProductDesc = styled.p`
   margin-bottom: 20px;
 `;
 
-const ActionButton = styled.button`
-  width: 100%;
-  padding: 14px;
-  background: #c0a062;
-  color: #111827;
-  border: 1px solid #c0a062;
-  border-radius: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 0.85rem;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 15px rgba(192, 160, 98, 0.2);
-
-  &:hover {
-    background: #d4b886;
-    color: #111827;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(192, 160, 98, 0.3);
-  }
-`;
-
 const PRODUCTS = [
-  { title: "Empire Vase", price: "RS:2500.00", img: img1, desc: "Elegant decorative vase with intricate detailing" },
-  { title: "Monarch Armchair", price: "RS:15000.00", img: img2, desc: "Luxurious armchair with premium upholstery" },
-  { title: "Obsidian Table", price: "RS:20000.00", img: img3, desc: "Modern table with sleek black finish" },
+  { title: "Flower  Vase", price: "RS:2500.00", img: img1, desc: "Elegant decorative vase with intricate detailing" },
+  { title: "Flower vase", price: "RS:15000.00", img: img2, desc: "Luxurious armchair with premium upholstery" },
+  { title: "Flower vase", price: "RS:20000.00", img: img3, desc: "Modern table with sleek black finish" },
   { title: "Elegant Decor Piece", price: "RS:18500.00", img: img4, desc: "Modern ceramic design with matte finish" },
-  { title: "Artistic Sculpture", price: "RS:22000.00", img: img5, desc: "Contemporary abstract art piece" },
-  { title: "Designer Vase", price: "RS:15750.00", img: img6, desc: "Handcrafted with intricate patterns" },
-  { title: "Premium Showpiece", price: "RS:32500.00", img: img7, desc: "Luxury decor for executive spaces" },
+  { title: "sofa set", price: "RS:22000.00", img: img5, desc: "Contemporary abstract art piece" },
+  { title: "Table & bench", price: "RS:15750.00", img: img6, desc: "Handcrafted with intricate patterns" },
+  { title: "large flower vase", price: "RS:32500.00", img: img7, desc: "Luxury decor for executive spaces" },
   { title: "Classic Ornament", price: "RS:19900.00", img: img8, desc: "Timeless design with elegant curves" },
 ];
 

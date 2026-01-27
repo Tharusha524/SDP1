@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaTasks, FaCheckCircle, FaClock, FaClipboardList, FaArrowRight, FaBell, FaSignOutAlt } from 'react-icons/fa';
+import { FaTasks, FaCheckCircle, FaClock, FaClipboardList, FaBell, FaSignOutAlt } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 // --- Global Luxury Styles ---
@@ -300,9 +300,9 @@ const SubmitButton = styled(motion.button)`
 `;
 
 const initialTasks = [
-  { id: 'TSK-4001', desc: 'Mix the sand and stone powder', status: 'Pending', priority: 'High' },
-  { id: 'TSK-4002', desc: 'Apply the coating', status: 'Pending', priority: 'Medium' },
-  { id: 'TSK-4003', desc: 'Mix all ingredients', status: 'Pending', priority: 'Low' },
+  { id: 'T-4001', desc: 'Mix the sand and stone powder', status: 'Pending', priority: 'High' },
+  { id: 'T-4002', desc: 'Apply the coating', status: 'Pending', priority: 'Medium' },
+  { id: 'T-4003', desc: 'Mix all ingredients', status: 'Pending', priority: 'Low' },
 ];
 
 export default function StaffTasks() {
@@ -325,7 +325,7 @@ export default function StaffTasks() {
     if (orderId && orderStatus) {
       setNotification({
         show: true,
-        msg: `Order #${orderId} has been updated to ${orderStatus}.`,
+        msg: `Order ${orderId} has been updated to ${orderStatus}.`,
       });
       setOrderId('');
       setOrderStatus('');
@@ -391,7 +391,7 @@ export default function StaffTasks() {
                 <tbody>
                   {tasks.map((task, idx) => (
                     <motion.tr key={task.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 + idx * 0.1 }}>
-                      <td><span style={{ color: '#c0a062', fontWeight: 600 }}>#{task.id}</span></td>
+                      <td><span style={{ color: '#c0a062', fontWeight: 600 }}>{task.id}</span></td>
                       <td>{task.desc}</td>
                       <td><PriorityBadge type={task.priority}>{task.priority}</PriorityBadge></td>
                       <td>
@@ -444,9 +444,9 @@ export default function StaffTasks() {
                     required
                   >
 
-                    <option value="pending">Processing</option>
+                    <option value="pending">Pending</option>
 
-                    <option value="completed">completed</option>
+                    <option value="completed">Completed</option>
 
                   </Select>
                 </FormGroup>

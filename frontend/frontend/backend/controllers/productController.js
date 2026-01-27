@@ -1,6 +1,6 @@
 const Product = require('../models/Product');
 
-// Handles product logic
+// Get all products
 exports.getAllProducts = async (req, res) => {
   try {
     const products = await Product.findAll();
@@ -10,12 +10,68 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-exports.createProduct = async (req, res) => {
-  const { name, price, stock } = req.body;
+// Get single product
+exports.getProductById = async (req, res) => {
   try {
-    const productId = await Product.create({ name, price, stock });
-    res.json({ success: true, productId });
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+    res.json({ success: true, product });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Create new product
+exports.createProduct = async (req, res) => {
+  const { name, description, price, image } = req.body;
+  
+  console.log('Creating product with data:', { name, price, hasImage: !!image });
+  
+  if (!name || !price) {
+    console.error('Validation failed: Missing name or price');
+    return res.status(400).json({ success: false, error: 'Name and price are required' });
+  }
+
+  try {
+    const productId = await Product.create({ name, description, price, image });
+    console.log('Product created successfully:', productId);
+    res.status(201).json({ success: true, productId, message: 'Product created successfully' });
+  } catch (err) {
+    console.error('Error creating product:', err.message);
+    console.error('Full error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Update product
+exports.updateProduct = async (req, res) => {
+  const { name, description, price, image } = req.body;
+  
+  try {
+    const updated = await Product.update(req.params.id, { name, description, price, image });
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+    res.json({ success: true, message: 'Product updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Delete product
+exports.deleteProduct = async (req, res) => {
+  try {
+    console.log('Deleting product:', req.params.id);
+    const deleted = await Product.hardDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+    console.log('✅ Product permanently deleted from database');
+    res.json({ success: true, message: 'Product deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting product:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

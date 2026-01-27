@@ -2,11 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
-const { authenticateToken, authorizeRole } = require('../middleware/authMiddleware');
 
-// Example: Get all products (protected route)
-router.get('/', authenticateToken, authorizeRole('admin', 'staff', 'storekeeper'), productController.getAllProducts);
+// Public routes (anyone can view products)
+router.get('/', productController.getAllProducts);
+router.get('/:id', productController.getProductById);
 
-// Add more product routes as needed
+// Admin-only routes (create, update, delete)
+router.post('/', productController.createProduct);
+router.put('/:id', productController.updateProduct);
+router.delete('/:id', productController.deleteProduct);
 
 module.exports = router;

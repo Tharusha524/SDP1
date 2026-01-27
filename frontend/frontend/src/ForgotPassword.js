@@ -247,7 +247,8 @@ const ForgotPassword = () => {
       const data = await response.json();
 
       if (data.success) {
-        setIsSubmitted(true);
+        // Navigate to reset password page which handles OTP verification
+        navigate('/reset-password', { state: { email } });
       } else {
         setError(data.message || 'Failed to request password reset');
       }
