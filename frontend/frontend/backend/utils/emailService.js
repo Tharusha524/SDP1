@@ -1,12 +1,15 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const nodemailer = require('nodemailer');
 
+const fs = require('fs');
+const path = require('path');
+
 console.log('Email Service Configuration:');
 console.log('EMAIL_USER:', process.env.EMAIL_USER);
 console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '****' + process.env.EMAIL_PASSWORD.slice(-4) : 'NOT SET');
 
-// Configure email transporter for Gmail
-const transporter = nodemailer.createTransport({
+// Configure primary email transporter for Gmail
+let transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
   secure: true, // Use SSL
@@ -16,6 +19,29 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Fallback: stream transport that writes emails to disk (for development)
+let useFallback = false;
+const EMAIL_LOG_PATH = path.join(__dirname, '..', 'emails.log');
+
+const fallbackTransport = nodemailer.createTransport({
+  streamTransport: true,
+  newline: 'unix',
+  buffer: true
+});
+
+// Verify transporter immediately to catch auth/config issues at startup
+transporter.verify().then(() => {
+  console.log('Email transporter verified successfully. Ready to send emails.');
+}).catch(err => {
+  console.error('Email transporter verification failed. Falling back to local log transport.');
+  console.error('Verify that `EMAIL_USER` and `EMAIL_PASSWORD` in backend/.env are correct.');
+  console.error('If using Gmail, ensure 2FA is enabled and use an App Password: https://support.google.com/accounts/answer/185833');
+  console.error('Detailed error:', err && (err.message || err));
+  transporter = fallbackTransport;
+  useFallback = true;
+  try { fs.appendFileSync(EMAIL_LOG_PATH, `${new Date().toISOString()} - Email transporter fallback enabled due to auth error\n`); } catch (e) {}
+  console.log('Using fallback stream transport; outgoing emails will be written to', EMAIL_LOG_PATH);
+});
 // Generate 6-digit OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -125,9 +151,22 @@ const sendOTPEmail = async (email, otp, name) => {
   try {
     await transporter.sendMail(mailOptions);
     console.log(`OTP sent successfully to ${email}`);
+    // If we're using the fallback transport, also write a simple record to emails.log for easy lookup
+    if (useFallback) {
+      try { fs.appendFileSync(EMAIL_LOG_PATH, `${new Date().toISOString()} | OTP email to: ${email} | OTP: ${otp} | Name: ${name}\n`); } catch (e) {}
+    }
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
+    // Provide clearer error details for auth failures
+    if (error && error.code === 'EAUTH') {
+      console.error('Authentication failed when sending email. Check EMAIL_USER/EMAIL_PASSWORD and Gmail app password settings.');
+    }
+    // If not in production, fall back to logging the email and return success so dev flow can continue
+    if (error && error.code === 'EAUTH' && process.env.NODE_ENV !== 'production') {
+      try { fs.appendFileSync(EMAIL_LOG_PATH, `${new Date().toISOString()} | FAILED AUTH - Saved OTP for: ${email} | OTP: ${otp} | Name: ${name}\n`); console.log('Saved OTP to', EMAIL_LOG_PATH); return true; } catch (e) { }
+    }
+    // Re-throw the original error so callers (controllers) can handle it
     throw error;
   }
 };
@@ -174,9 +213,14 @@ const sendPasswordResetOTP = async (email, otp, name) => {
   try {
     await transporter.sendMail(mailOptions);
     console.log(`Reset OTP sent successfully to ${email}`);
+    if (useFallback) { try { fs.appendFileSync(EMAIL_LOG_PATH, `${new Date().toISOString()} | Reset OTP to: ${email} | OTP: ${otp} | Name: ${name}\n`); } catch (e) {} }
     return true;
   } catch (error) {
     console.error('Error sending Reset OTP email:', error);
+    if (error && error.code === 'EAUTH') {
+      console.error('Authentication failed when sending reset email. Check EMAIL_USER/EMAIL_PASSWORD and Gmail app password settings.');
+    }
+    if (error && error.code === 'EAUTH' && process.env.NODE_ENV !== 'production') { try { fs.appendFileSync(EMAIL_LOG_PATH, `${new Date().toISOString()} | FAILED AUTH - Saved Reset OTP for: ${email} | OTP: ${otp} | Name: ${name}\n`); console.log('Saved Reset OTP to', EMAIL_LOG_PATH); return true; } catch (e) {} }
     throw error;
   }
 };

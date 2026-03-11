@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaTasks, FaCheckCircle, FaClock, FaClipboardList, FaBell, FaSignOutAlt } from 'react-icons/fa';
@@ -299,38 +299,67 @@ const SubmitButton = styled(motion.button)`
   }
 `;
 
-const initialTasks = [
-  { id: 'T-4001', desc: 'Mix the sand and stone powder', status: 'Pending', priority: 'High' },
-  { id: 'T-4002', desc: 'Apply the coating', status: 'Pending', priority: 'Medium' },
-  { id: 'T-4003', desc: 'Mix all ingredients', status: 'Pending', priority: 'Low' },
-];
-
 export default function StaffTasks() {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [orderId, setOrderId] = useState('');
-  const [orderStatus, setOrderStatus] = useState('');
-  const [notification, setNotification] = useState({ show: false, msg: '' });
+  const [orderStatus, setOrderStatus] = useState('Pending');
+  const [notification, setNotification] = useState({ show: false, msg: '', error: false });
 
-  const markComplete = (idx) => {
-    setTasks((prev) =>
-      prev.map((task, i) =>
-        i === idx ? { ...task, status: 'Completed' } : task
-      )
-    );
+  const token = localStorage.getItem('token');
+  const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Load real tasks for this staff member from DB
+  useEffect(() => {
+    if (!token) { navigate('/login'); return; }
+    fetch('http://localhost:5000/api/staff/tasks', { headers: authHeader })
+      .then(r => r.json())
+      .then(data => { if (data.success) setTasks(data.tasks); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    navigate('/catalog');
   };
 
-  const handleOrderSubmit = (e) => {
-    e.preventDefault();
-    if (orderId && orderStatus) {
-      setNotification({
-        show: true,
-        msg: `Order ${orderId} has been updated to ${orderStatus}.`,
+  const markComplete = async (taskId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/staff/tasks/${taskId}/complete`, {
+        method: 'PATCH',
+        headers: authHeader
       });
-      setOrderId('');
-      setOrderStatus('');
-      setTimeout(() => setNotification({ show: false, msg: '' }), 4000);
+      const data = await res.json();
+      if (data.success) {
+        setTasks(prev => prev.map(t => t.TaskID === taskId ? { ...t, Status: 'Completed' } : t));
+      }
+    } catch {}
+  };
+
+  const handleOrderSubmit = async (e) => {
+    e.preventDefault();
+    if (!orderId.trim() || !orderStatus) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/staff/orders/${orderId.trim()}/status`, {
+        method: 'PATCH',
+        headers: authHeader,
+        body: JSON.stringify({ status: orderStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNotification({ show: true, msg: `Order ${orderId.trim()} updated to "${orderStatus}".`, error: false });
+        setOrderId('');
+      } else {
+        setNotification({ show: true, msg: data.error || 'Update failed.', error: true });
+      }
+    } catch {
+      setNotification({ show: true, msg: 'Network error. Please try again.', error: true });
     }
+    setTimeout(() => setNotification({ show: false, msg: '', error: false }), 4000);
   };
 
   return (
@@ -347,7 +376,7 @@ export default function StaffTasks() {
             <NotificationBtn title="Notifications">
               <FaBell />
             </NotificationBtn>
-            <ActionButton onClick={() => navigate('/login')} style={{ padding: '8px 15px' }}>
+            <ActionButton onClick={handleLogout} style={{ padding: '8px 15px' }}>
               <FaSignOutAlt />
             </ActionButton>
           </UserActions>
@@ -389,32 +418,38 @@ export default function StaffTasks() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((task, idx) => (
-                    <motion.tr key={task.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 + idx * 0.1 }}>
-                      <td><span style={{ color: '#c0a062', fontWeight: 600 }}>{task.id}</span></td>
-                      <td>{task.desc}</td>
-                      <td><PriorityBadge type={task.priority}>{task.priority}</PriorityBadge></td>
-                      <td>
-                        <StatusIndicator completed={task.status === 'Completed'}>
-                          {task.status === 'Completed' ? <FaCheckCircle /> : <FaClock />}
-                          {task.status}
-                        </StatusIndicator>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {task.status === 'Pending' ? (
-                          <ActionButton
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => markComplete(idx)}
-                          >
-                            Mark Complete
-                          </ActionButton>
-                        ) : (
-                          <span style={{ color: '#10b981', fontStyle: 'italic', fontSize: '0.85rem' }}>Fullfilled</span>
-                        )}
-                      </td>
-                    </motion.tr>
-                  ))}
+                  {loading ? (
+                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>Loading tasks...</td></tr>
+                  ) : tasks.length === 0 ? (
+                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>No tasks assigned.</td></tr>
+                  ) : (
+                    tasks.map((task, idx) => (
+                      <motion.tr key={task.TaskID} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 + idx * 0.05 }}>
+                        <td><span style={{ color: '#c0a062', fontWeight: 600 }}>{task.TaskID}</span></td>
+                        <td>{task.Description}</td>
+                        <td><PriorityBadge type={task.Priority}>{task.Priority}</PriorityBadge></td>
+                        <td>
+                          <StatusIndicator completed={task.Status === 'Completed'}>
+                            {task.Status === 'Completed' ? <FaCheckCircle /> : <FaClock />}
+                            {task.Status}
+                          </StatusIndicator>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {task.Status !== 'Completed' ? (
+                            <ActionButton
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => markComplete(task.TaskID)}
+                            >
+                              Mark Complete
+                            </ActionButton>
+                          ) : (
+                            <span style={{ color: '#10b981', fontStyle: 'italic', fontSize: '0.85rem' }}>Fulfilled</span>
+                          )}
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
                 </tbody>
               </TaskTable>
             </GlassCard>
@@ -443,11 +478,10 @@ export default function StaffTasks() {
                     onChange={e => setOrderStatus(e.target.value)}
                     required
                   >
-
-                    <option value="pending">Pending</option>
-
-                    <option value="completed">Completed</option>
-
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
                   </Select>
                 </FormGroup>
                 <SubmitButton
@@ -465,7 +499,7 @@ export default function StaffTasks() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    style={{ marginTop: '25px', padding: '15px', borderLeft: '2px solid #c0a062', background: 'rgba(192, 160, 98, 0.05)', fontSize: '0.85rem', color: '#c0a062' }}
+                    style={{ marginTop: '25px', padding: '15px', borderLeft: `2px solid ${notification.error ? '#ef4444' : '#c0a062'}`, background: notification.error ? 'rgba(239,68,68,0.05)' : 'rgba(192, 160, 98, 0.05)', fontSize: '0.85rem', color: notification.error ? '#ef4444' : '#c0a062' }}
                   >
                     {notification.msg}
                   </motion.div>

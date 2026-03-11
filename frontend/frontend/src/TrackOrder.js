@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBell, FaSearch, FaClock, FaInfoCircle, FaArrowRight, FaBoxOpen } from 'react-icons/fa';
@@ -278,33 +278,61 @@ const TrackOrder = () => {
   const [orderId, setOrderId] = useState('');
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [trackError, setTrackError] = useState(null);
+  const [searching, setSearching] = useState(false);
 
-  const handleTrack = (e) => {
+  // Load customer's own orders as notifications on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch('http://localhost:5000/api/orders/my', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setNotifications(data.orders.map(o => ({
+            id: o.OrderID,
+            orderId: o.OrderID,
+            status: `${o.Status}${o.Items ? ' — ' + o.Items : ''}`,
+            time: new Date(o.OrderDate).toLocaleString()
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleTrack = async (e) => {
     e.preventDefault();
-    if (!orderId) return;
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString();
-
-    const newTracked = {
-      id: orderId,
-      status: 'Pending Verification',
-      time: `${dateStr} ${timeStr}`
-    };
-
-    setTrackedOrder(newTracked);
-
-    // Add to notification center
-    const newNotif = {
-      id: Date.now(),
-      orderId: orderId,
-      status: 'your order is pending.we will notify you once it is processed.',
-      time: `${timeStr}, ${dateStr}`
-    };
-
-    setNotifications(prev => [newNotif, ...prev]);
-    setOrderId('');
+    if (!orderId.trim()) return;
+    setTrackError(null);
+    setSearching(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) { navigate('/login'); return; }
+      const res = await fetch(`http://localhost:5000/api/orders/${orderId.trim()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        const o = data.order;
+        setTrackedOrder({
+          id: o.OrderID,
+          status: o.Status,
+          time: new Date(o.OrderDate).toLocaleString(),
+          items: o.Items
+        });
+        setOrderId('');
+      } else {
+        setTrackError(data.error || 'Order not found');
+        setTrackedOrder(null);
+      }
+    } catch {
+      setTrackError('Network error. Please try again.');
+      setTrackedOrder(null);
+    } finally {
+      setSearching(false);
+    }
   };
 
   return (
@@ -382,26 +410,34 @@ const TrackOrder = () => {
             <SearchForm onSubmit={handleTrack}>
               <Input
                 type="text"
-                placeholder="Enter Order ID (e.g., ORD-5421)"
+                placeholder="Enter Order ID (e.g., ORD-0004)"
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value)}
                 required
               />
               <SearchBtn
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: searching ? 1 : 1.05 }}
+                whileTap={{ scale: searching ? 1 : 0.95 }}
                 type="submit"
+                disabled={searching}
               >
                 <FaSearch />
               </SearchBtn>
             </SearchForm>
 
+            {trackError && (
+              <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '15px', padding: '10px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                {trackError}
+              </div>
+            )}
+
             <ResultTable>
               <thead>
                 <tr>
                   <th>Ref ID</th>
-                  <th>Alignment</th>
-                  <th>Last Sync</th>
+                  <th>Status</th>
+                  <th>Items</th>
+                  <th>Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -413,14 +449,15 @@ const TrackOrder = () => {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                     >
-                      <td style={{ color: '#f3f4f6', fontWeight: 600 }}>#{trackedOrder.id}</td>
+                      <td style={{ color: '#f3f4f6', fontWeight: 600 }}>{trackedOrder.id}</td>
                       <td><StatusBadge>{trackedOrder.status}</StatusBadge></td>
-                      <td style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}><FaClock size={10} style={{ marginRight: '5px' }} /> {trackedOrder.time}</td>
+                      <td style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{trackedOrder.items || '—'}</td>
+                      <td style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}><FaClock size={10} style={{ marginRight: '5px' }} />{trackedOrder.time}</td>
                     </motion.tr>
                   ) : (
                     <tr>
-                      <td colSpan="3" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.15)', fontSize: '0.85rem' }}>
-                        Initiate a search to visualize status.
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.15)', fontSize: '0.85rem' }}>
+                        {searching ? 'Searching...' : 'Enter an Order ID to look up its status.'}
                       </td>
                     </tr>
                   )}

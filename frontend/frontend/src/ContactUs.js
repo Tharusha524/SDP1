@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -69,13 +69,12 @@ const Subtitle = styled.p`
 
 const ContentGrid = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 40px;
   margin-top: 40px;
-
-  @media (max-width: 968px) {
-    grid-template-columns: 1fr;
-  }
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
 `;
 
 const InfoSection = styled(motion.div)`
@@ -142,127 +141,8 @@ const InfoText = styled.p`
   margin: 0;
 `;
 
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const InputGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const Label = styled.label`
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-`;
-
-const Input = styled.input`
-  padding: 14px 16px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: #f3f4f6;
-  font-family: inherit;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #c0a062;
-    background: rgba(0, 0, 0, 0.5);
-  }
-
-  &::placeholder {
-    color: rgba(255, 255, 255, 0.3);
-  }
-`;
-
-const TextArea = styled.textarea`
-  padding: 14px 16px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: #f3f4f6;
-  font-family: inherit;
-  font-size: 1rem;
-  resize: vertical;
-  min-height: 120px;
-  transition: all 0.3s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #c0a062;
-    background: rgba(0, 0, 0, 0.5);
-  }
-
-  &::placeholder {
-    color: rgba(255, 255, 255, 0.3);
-  }
-`;
-
-const SubmitButton = styled(motion.button)`
-  padding: 16px;
-  background: #c0a062;
-  color: #000;
-  border: none;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: #d4b886;
-    transform: translateY(-2px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const SuccessMessage = styled(motion.div)`
-  padding: 16px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 12px;
-  color: #10b981;
-  text-align: center;
-  font-weight: 600;
-`;
-
 const ContactUs = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
-  });
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({ name: '', email: '', subject: '', message: '' });
-    }, 3000);
-  };
 
   return (
     <>
@@ -337,79 +217,7 @@ const ContactUs = () => {
             </InfoItem>
           </InfoSection>
 
-          <InfoSection
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-          >
-            <SectionTitle>Send us a Message</SectionTitle>
-            
-            {submitted ? (
-              <SuccessMessage
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-              >
-                Thank you! Your message has been sent successfully.
-              </SuccessMessage>
-            ) : (
-              <Form onSubmit={handleSubmit}>
-                <InputGroup>
-                  <Label>Name</Label>
-                  <Input
-                    type="text"
-                    name="name"
-                    placeholder="Your name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                  />
-                </InputGroup>
 
-                <InputGroup>
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    placeholder="your@email.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </InputGroup>
-
-                <InputGroup>
-                  <Label>Subject</Label>
-                  <Input
-                    type="text"
-                    name="subject"
-                    placeholder="Subject of your message"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    required
-                  />
-                </InputGroup>
-
-                <InputGroup>
-                  <Label>Message</Label>
-                  <TextArea
-                    name="message"
-                    placeholder="Your message..."
-                    value={formData.message}
-                    onChange={handleChange}
-                    required
-                  />
-                </InputGroup>
-
-                <SubmitButton
-                  type="submit"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Send Message
-                </SubmitButton>
-              </Form>
-            )}
-          </InfoSection>
         </ContentGrid>
       </Container>
     </>

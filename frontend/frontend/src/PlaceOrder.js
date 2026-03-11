@@ -207,32 +207,37 @@ const OrderId = styled.div`
   color: #fff;
 `;
 
-const priceMap = {
-  chairs: 5000,
-  tables: 15000,
-  sofas: 20000,
-  beds: 30000,
-  flower_vases: 2500
-};
-
 const PlaceOrder = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    fullname: '',
-    product: '',
-    details: '',
-    quantity: 1
-  });
+  const [products, setProducts] = useState([]);
+  const [formData, setFormData] = useState({ product: '', details: '', quantity: 1 });
   const [totalPrice, setTotalPrice] = useState(0);
   const [orderSuccess, setOrderSuccess] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
+  const customerName = (() => {
+    try { return JSON.parse(localStorage.getItem('user'))?.name || ''; }
+    catch { return ''; }
+  })();
+
+  // Fetch real products from DB on mount
+  useEffect(() => {
+    fetch('http://localhost:5000/api/products')
+      .then(r => r.json())
+      .then(data => { if (data.success) setProducts(data.products); })
+      .catch(() => {});
+  }, []);
+
+  // Recalculate price from real product price
   useEffect(() => {
     if (formData.product && formData.quantity > 0) {
-      setTotalPrice(priceMap[formData.product] * formData.quantity);
+      const found = products.find(p => p.ProductID === formData.product);
+      setTotalPrice(found ? found.Price * formData.quantity : 0);
     } else {
       setTotalPrice(0);
     }
-  }, [formData.product, formData.quantity]);
+  }, [formData.product, formData.quantity, products]);
 
   const handleInputChange = (e) => {
     const { id, value } = e.target;
@@ -242,11 +247,36 @@ const PlaceOrder = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const randomNum = Math.floor(Math.random() * 9000) + 1;
-    const orderId = `ORD-${String(randomNum).padStart(4, '0')}`;
-    setOrderSuccess(orderId);
+    setError(null);
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/login'); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          productId: formData.product,
+          quantity: formData.quantity,
+          details: formData.details
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrderSuccess(data.orderId);
+      } else {
+        setError(data.error || 'Failed to place order. Please try again.');
+      }
+    } catch {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -286,31 +316,32 @@ const PlaceOrder = () => {
         >
           <Form id="orderForm" onSubmit={handleSubmit}>
             <FormGroup>
-              <Label htmlFor="fullname"><FaUser size={12} /> Full Name</Label>
+              <Label htmlFor="customername"><FaUser size={12} /> Customer Name</Label>
               <Input
+                id="customername"
                 type="text"
-                id="fullname"
-                placeholder="Enter your full name"
-                value={formData.fullname}
-                onChange={handleInputChange}
-                required
+                value={customerName}
+                readOnly
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
               />
             </FormGroup>
 
             <FormGroup>
-              <Label htmlFor="product"><FaListUl size={12} /> Product Type</Label>
+              <Label htmlFor="product"><FaListUl size={12} /> Product Name</Label>
               <Select
                 id="product"
                 value={formData.product}
                 onChange={handleInputChange}
                 required
               >
-                <option value="" disabled>-- Select Product --</option>
-                <option value="chairs">Chairs</option>
-                <option value="tables">Tables</option>
-                <option value="sofas">Sofas</option>
-                <option value="beds">Beds</option>
-                <option value="flower_vases">Flower Vases</option>
+                <option value="" disabled>
+                  {products.length === 0 ? 'Loading products...' : '-- Select Product --'}
+                </option>
+                {products.map(p => (
+                  <option key={p.ProductID} value={p.ProductID}>
+                    {p.Name} — Rs. {Number(p.Price).toLocaleString()}
+                  </option>
+                ))}
               </Select>
             </FormGroup>
 
@@ -319,10 +350,9 @@ const PlaceOrder = () => {
               <Input
                 type="text"
                 id="details"
-                placeholder="e.g. cherry wood, velvet blue, etc."
+                placeholder="e.g. custom finish, special notes, etc."
                 value={formData.details}
                 onChange={handleInputChange}
-                required
               />
             </FormGroup>
 
@@ -346,12 +376,20 @@ const PlaceOrder = () => {
               </PriceValue>
             </PriceBox>
 
+            {error && (
+              <div style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', padding: '12px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                {error}
+              </div>
+            )}
+
             <SubmitButton
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: submitting ? 1 : 1.02 }}
+              whileTap={{ scale: submitting ? 1 : 0.98 }}
               type="submit"
+              disabled={submitting}
+              style={{ opacity: submitting ? 0.7 : 1 }}
             >
-              Confirm Order <FaShoppingBag />
+              {submitting ? 'Placing Order...' : <><FaShoppingBag /> Confirm Order</>}
             </SubmitButton>
           </Form>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaExclamationTriangle, FaDollyFlatbed, FaClock, FaCheckCircle, FaChartLine, FaSignOutAlt } from 'react-icons/fa';
@@ -205,39 +205,85 @@ const AlertToast = styled(motion.div)`
 
 const InventoryTracker = () => {
     const navigate = useNavigate();
-    const [materials, setMaterials] = useState([
-        { id: 'MAT-3001', name: 'Cement', stock: 10, threshold: 5, alertTime: '2025-09-28 10:00', update: '' },
-        { id: 'MAT-3002', name: 'Stone Powder', stock: 20, threshold: 10, alertTime: '2025-09-28 10:00', update: '' },
-        { id: 'MAT-3003', name: 'Sand', stock: 8, threshold: 5, alertTime: '2025-09-28 10:00', update: '' }
-    ]);
 
+    const handleLogout = () => {
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        navigate('/catalog');
+    };
+
+    const [materials, setMaterials] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [showLowStockMsg, setShowLowStockMsg] = useState(false);
     const [toast, setToast] = useState({ show: false, msg: '' });
+
+    const token = localStorage.getItem('token');
+    const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    useEffect(() => {
+        if (!token) { navigate('/login'); return; }
+        fetch('http://localhost:5000/api/inventory', { headers: authHeader })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const mapped = data.inventory.map(i => ({
+                        id: i.InventoryID,
+                        name: i.InventoryName,
+                        stock: i.AvailableQuantity,
+                        threshold: i.MinimumThreshold,
+                        alertTime: i.LastUpdated ? new Date(i.LastUpdated).toLocaleString() : 'N/A',
+                        update: ''
+                    }));
+                    setMaterials(mapped);
+                    if (mapped.some(m => m.stock <= m.threshold)) setShowLowStockMsg(true);
+                }
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleInputChange = (id, value) => {
         setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: value } : m));
     };
 
-    const updateStock = () => {
-        const now = new Date();
-        const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        let lowFound = false;
-        const newMaterials = materials.map(m => {
-            const updateVal = parseInt(m.update);
-            if (!isNaN(updateVal)) {
-                const finalStock = updateVal;
-                if (finalStock <= m.threshold) lowFound = true;
-                return { ...m, stock: finalStock, alertTime: timeStr, update: '' };
+    const updateStock = async () => {
+        const itemsToUpdate = materials.filter(m => m.update !== '' && !isNaN(parseInt(m.update)));
+        if (itemsToUpdate.length === 0) {
+            setToast({ show: true, msg: 'Enter a quantity in at least one row to update.' });
+            setTimeout(() => setToast({ show: false, msg: '' }), 4000);
+            return;
+        }
+        try {
+            await Promise.all(itemsToUpdate.map(m =>
+                fetch(`http://localhost:5000/api/inventory/${m.id}`, {
+                    method: 'PATCH',
+                    headers: authHeader,
+                    body: JSON.stringify({ quantity: parseInt(m.update) })
+                })
+            ));
+            // Refresh from DB
+            const res = await fetch('http://localhost:5000/api/inventory', { headers: authHeader });
+            const data = await res.json();
+            if (data.success) {
+                const mapped = data.inventory.map(i => ({
+                    id: i.InventoryID,
+                    name: i.InventoryName,
+                    stock: i.AvailableQuantity,
+                    threshold: i.MinimumThreshold,
+                    alertTime: i.LastUpdated ? new Date(i.LastUpdated).toLocaleString() : 'N/A',
+                    update: ''
+                }));
+                setMaterials(mapped);
+                const lowFound = mapped.some(m => m.stock <= m.threshold);
+                if (lowFound) {
+                    setShowLowStockMsg(true);
+                    setTimeout(() => setShowLowStockMsg(false), 5000);
+                }
             }
-            return m;
-        });
-
-        setMaterials(newMaterials);
-        setToast({ show: true, msg: 'Inventory updated successfully.' });
-        if (lowFound) {
-            setShowLowStockMsg(true);
-            setTimeout(() => setShowLowStockMsg(false), 5000);
+            setToast({ show: true, msg: 'Inventory updated successfully.' });
+        } catch {
+            setToast({ show: true, msg: 'Network error. Please try again.' });
         }
         setTimeout(() => setToast({ show: false, msg: '' }), 4000);
     };
@@ -263,7 +309,7 @@ const InventoryTracker = () => {
                             Real-Time Tracker
                         </Title>
                     </TitleSection>
-                    <LogoutButton onClick={() => navigate('/login')}>
+                    <LogoutButton onClick={handleLogout}>
                         <FaSignOutAlt /> Logout
                     </LogoutButton>
                 </Header>
@@ -284,7 +330,8 @@ const InventoryTracker = () => {
                     <Table>
                         <thead>
                             <tr>
-                                <th><FaDollyFlatbed style={{ marginRight: '10px' }} /> Material</th>
+                                <th>Inventory ID</th>
+                                <th><FaDollyFlatbed style={{ marginRight: '10px' }} /> Inventory Name</th>
                                 <th>Current Stock</th>
                                 <th>Threshold</th>
                                 <th><FaClock style={{ marginRight: '10px' }} /> Last Sync</th>
@@ -292,13 +339,18 @@ const InventoryTracker = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {materials.map((mat, idx) => (
+                            {loading ? (
+                                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>Loading inventory...</td></tr>
+                            ) : materials.length === 0 ? (
+                                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>No inventory items found.</td></tr>
+                            ) : materials.map((mat, idx) => (
                                 <motion.tr
                                     key={mat.id}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.4 + idx * 0.1 }}
                                 >
+                                    <td style={{ color: '#c0a062', fontWeight: 700, letterSpacing: '0.5px' }}>{mat.id}</td>
                                     <td style={{ color: '#ffffff', fontWeight: 600 }}>{mat.name}</td>
                                     <td>
                                         <StockValue isLow={mat.stock <= mat.threshold}>

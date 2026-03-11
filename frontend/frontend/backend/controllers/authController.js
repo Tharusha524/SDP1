@@ -125,7 +125,11 @@ exports.register = async (req, res) => {
       console.log(`Verification OTP sent to ${email}: ${otp}`);
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
-      return res.status(500).json({ success: false, message: 'Failed to send verification email. Please try again.' });
+      // If authentication with SMTP failed, return a helpful hint
+      if (emailError && emailError.code === 'EAUTH') {
+        return res.status(500).json({ success: false, message: 'Failed to send verification email due to mail authentication error. Please check backend email settings (EMAIL_USER / EMAIL_PASSWORD).' });
+      }
+      return res.status(500).json({ success: false, message: 'Failed to send verification email. Please try again later.' });
     }
 
     res.json({
@@ -161,28 +165,40 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
     }
 
-    // Find pending registration
-    const pendingUser = await User.getPendingRegistration(email);
+    // Find pending registration. If none, try users table as a fallback
+    let pendingUser = await User.getPendingRegistration(email);
+    let source = 'pending_registrations';
+
+    if (!pendingUser) {
+      console.log('No pending registration found in pending_registrations, checking users table...');
+      const userRecord = await User.findByUsername(email);
+      if (userRecord && !userRecord.is_verified && (userRecord.verification_token || userRecord.token_expires)) {
+        // Use the users table record as fallback
+        pendingUser = userRecord;
+        source = 'users';
+      }
+    }
+
     if (!pendingUser) {
       console.log('❌ No pending registration found for:', email);
       return res.status(404).json({ success: false, message: 'No pending registration found. Please register again.' });
     }
 
-    console.log('✓ Pending user found:', pendingUser.email);
-    console.log('Stored OTP:', pendingUser.verification_token);
-    console.log('Stored OTP type:', typeof pendingUser.verification_token);
-    console.log('Expiry:', pendingUser.token_expires);
+    console.log(`✓ Pending user found (source=${source}):`, pendingUser.email || pendingUser.Email || email);
+    console.log('Stored OTP (raw):', pendingUser.verification_token || pendingUser.verificationToken || pendingUser.reset_code);
+    console.log('Expiry:', pendingUser.token_expires || pendingUser.token_expires || pendingUser.token_expires);
 
-    // Check if OTP matches (convert both to strings and trim)
-    const receivedOTP = String(otp).trim();
-    const storedOTP = String(pendingUser.verification_token).trim();
-    
+    // Normalize OTPs: remove non-digit characters and trim
+    const normalize = v => (v === null || v === undefined) ? '' : String(v).replace(/\D/g, '').trim();
+    const receivedOTP = normalize(otp);
+    const storedOTP = normalize(pendingUser.verification_token || pendingUser.verificationToken || pendingUser.reset_code || '');
+
     console.log('Comparing:');
     console.log(`  Received: "${receivedOTP}"`);
     console.log(`  Stored:   "${storedOTP}"`);
     console.log(`  Match: ${receivedOTP === storedOTP}`);
 
-    if (receivedOTP !== storedOTP) {
+    if (!receivedOTP || receivedOTP.length < 4 || receivedOTP !== storedOTP) {
       console.log('❌ OTP mismatch');
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
@@ -234,31 +250,49 @@ exports.resendOTP = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Find user by email
-    const user = await User.findByUsername(email);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Check if already verified
-    if (user.is_verified) {
-      return res.status(400).json({ success: false, message: 'Account already verified' });
-    }
-
-    // Generate new OTP
+    // First check pending_registrations (user may not be created yet)
+    const pending = await User.getPendingRegistration(email);
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Update OTP in database (using verification_token)
-    await User.updateVerificationOTP(email, otp, otpExpiry);
+    if (pending) {
+      // Update pending registration OTP
+      await User.updatePendingVerificationOTP(email, otp, otpExpiry);
+      try {
+        await sendOTPEmail(email, otp, pending.name || (pending.Email || email));
+        console.log(`New OTP sent to pending registration ${email}: ${otp}`);
+      } catch (emailError) {
+        console.error('Error sending OTP email to pending registration:', emailError);
+        if (emailError && emailError.code === 'EAUTH') {
+          return res.status(500).json({ success: false, message: 'Failed to send OTP email due to mail authentication error. Check backend email settings.' });
+        }
+        return res.status(500).json({ success: false, message: 'Failed to send OTP email' });
+      }
+    } else {
+      // Fallback to users table
+      const user = await User.findByUsername(email);
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
 
-    // Send OTP email
-    try {
-      await sendOTPEmail(email, otp, user.username);
-      console.log(`New OTP sent to ${email}: ${otp}`);
-    } catch (emailError) {
-      console.error('Error sending OTP email:', emailError);
-      return res.status(500).json({ success: false, message: 'Failed to send OTP email' });
+      // Check if already verified
+      if (user.is_verified) {
+        return res.status(400).json({ success: false, message: 'Account already verified' });
+      }
+
+      // Update OTP in users table
+      await User.updateVerificationOTP(email, otp, otpExpiry);
+
+      try {
+        await sendOTPEmail(email, otp, user.username || user.Email || email);
+        console.log(`New OTP sent to ${email}: ${otp}`);
+      } catch (emailError) {
+        console.error('Error sending OTP email:', emailError);
+        if (emailError && emailError.code === 'EAUTH') {
+          return res.status(500).json({ success: false, message: 'Failed to send OTP email due to mail authentication error. Check backend email settings.' });
+        }
+        return res.status(500).json({ success: false, message: 'Failed to send OTP email' });
+      }
     }
 
     res.json({
@@ -293,6 +327,9 @@ exports.forgotPassword = async (req, res) => {
       console.log(`Password reset OTP sent to ${email}: ${otp}`);
     } catch (emailError) {
       console.error('Error sending reset OTP email:', emailError);
+      if (emailError && emailError.code === 'EAUTH') {
+        return res.status(500).json({ success: false, message: 'Failed to send reset email due to mail authentication error. Check backend email settings.' });
+      }
       return res.status(500).json({ success: false, message: 'Failed to send reset email' });
     }
 
@@ -372,5 +409,23 @@ exports.resetPassword = async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Debug helper: return pending registration or users verification info (development use only)
+exports.debugPending = async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).json({ success: false, message: 'Email query param required' });
+  try {
+    const pending = await User.getPendingRegistration(email);
+    if (pending) {
+      return res.json({ success: true, source: 'pending_registrations', pending });
+    }
+    const user = await User.findByUsername(email);
+    if (user) return res.json({ success: true, source: 'users', user });
+    return res.status(404).json({ success: false, message: 'No record found' });
+  } catch (err) {
+    console.error('Debug pending error:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 };

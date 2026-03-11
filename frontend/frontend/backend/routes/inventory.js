@@ -1,8 +1,10 @@
 // inventory.js
 const express = require('express');
 const router = express.Router();
-// const inventoryController = require('../controllers/inventoryController');
+const { getInventory, updateInventoryItem } = require('../controllers/inventoryController');
+const { authenticateToken, authorizeRole } = require('../middleware/authMiddleware');
 
-// Define inventory routes here
+router.get('/', authenticateToken, getInventory);
+router.patch('/:id', authenticateToken, authorizeRole('admin', 'staff', 'storekeeper'), updateInventoryItem);
 
 module.exports = router;

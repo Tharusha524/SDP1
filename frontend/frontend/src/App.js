@@ -34,6 +34,9 @@ function AnimatedRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
+        {/* Public Catalog (accessible without login) */}
+        <Route path="/catalog" element={<CatalogForCustomer />} />
+
         {/* Customer Journey */}
         <Route path="/customer/catalog" element={<CatalogForCustomer />} />
         <Route path="/customer/place-order" element={<PlaceOrder />} />

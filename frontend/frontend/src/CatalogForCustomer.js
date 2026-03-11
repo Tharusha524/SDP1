@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt } from 'react-icons/fa';
+import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt, FaUser, FaUserPlus, FaTachometerAlt } from 'react-icons/fa';
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
@@ -175,6 +175,32 @@ const NavLink = styled.a`
   &:hover { color: #c0a062; }
 `;
 
+const NavAuthButton = styled.button`
+  padding: 10px 22px;
+  border-radius: 25px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+`;
+
+const LoginNavBtn = styled(NavAuthButton)`
+  background: transparent;
+  border: 1.5px solid rgba(192, 160, 98, 0.6);
+  color: #c0a062;
+  &:hover { background: rgba(192,160,98,0.15); border-color: #c0a062; }
+`;
+
+const RegisterNavBtn = styled(NavAuthButton)`
+  background: #c0a062;
+  border: 1.5px solid #c0a062;
+  color: #000;
+  &:hover { background: #d4b886; }
+`;
+
 const NotificationIcon = styled.div`
   position: relative;
   cursor: pointer;
@@ -183,21 +209,6 @@ const NotificationIcon = styled.div`
   &:hover { color: #c0a062; }
 `;
 
-const Badge = styled.span`
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: #c0a062;
-  color: #000;
-  border-radius: 50%;
-  font-size: 10px;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-`;
 
 const SearchFilterBar = styled.div`
   display: flex;
@@ -423,12 +434,48 @@ const CatalogForCustomer = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
+  // Auth state — read from localStorage
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch (e) { setUser(null); }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/catalog');
+  };
+
+  // Role-based dashboard route
+  const getDashboardRoute = (role) => {
+    const roleRoutes = {
+      admin: '/admin/dashboard',
+      staff: '/staff/tasks',
+      storekeeper: '/storekeeper/inventory-tracker',
+      customer: '/customer/catalog',
+    };
+    return roleRoutes[role] || '/catalog';
+  };
+
+  // Guard: redirect to login if not authenticated customer
+  const handlePlaceOrder = () => {
+    if (!user) { navigate('/login'); return; }
+    navigate('/customer/place-order');
+  };
+
   const filteredProducts = PRODUCTS.filter(product => {
     const matchesSearch = product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.desc.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || product.type === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const isCustomer = user && user.role === 'customer';
+  const isOtherRole = user && user.role !== 'customer';
 
   return (
     <>
@@ -451,14 +498,46 @@ const CatalogForCustomer = () => {
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               >
                 <SidebarCloseBtn onClick={() => setIsSidebarOpen(false)}><FaTimes /></SidebarCloseBtn>
-                <SidebarButton onClick={() => navigate('/customer/place-order')}>
-                  <FaShoppingCart /> Place Order
-                </SidebarButton>
-                <SidebarButton onClick={() => navigate('/customer/track-order')}>
-                  <FaTruck /> Track Order
-                </SidebarButton>                <SidebarButton onClick={() => navigate('/login')}>
-                  <FaSignOutAlt /> Logout
-                </SidebarButton>              </Sidebar>
+
+                {/* Not logged in: show Login / Register */}
+                {!user && (
+                  <>
+                    <SidebarButton onClick={() => { setIsSidebarOpen(false); navigate('/login'); }}>
+                      <FaUser /> Login
+                    </SidebarButton>
+                    <SidebarButton onClick={() => { setIsSidebarOpen(false); navigate('/register'); }}>
+                      <FaUserPlus /> Register
+                    </SidebarButton>
+                  </>
+                )}
+
+                {/* Customer: show order actions + logout */}
+                {isCustomer && (
+                  <>
+                    <SidebarButton onClick={() => { setIsSidebarOpen(false); navigate('/customer/place-order'); }}>
+                      <FaShoppingCart /> Place Order
+                    </SidebarButton>
+                    <SidebarButton onClick={() => { setIsSidebarOpen(false); navigate('/customer/track-order'); }}>
+                      <FaTruck /> Track Order
+                    </SidebarButton>
+                    <SidebarButton onClick={handleLogout}>
+                      <FaSignOutAlt /> Logout
+                    </SidebarButton>
+                  </>
+                )}
+
+                {/* Admin / Staff / Storekeeper: show dashboard + logout */}
+                {isOtherRole && (
+                  <>
+                    <SidebarButton onClick={() => { setIsSidebarOpen(false); navigate(getDashboardRoute(user.role)); }}>
+                      <FaTachometerAlt /> My Dashboard
+                    </SidebarButton>
+                    <SidebarButton onClick={handleLogout}>
+                      <FaSignOutAlt /> Logout
+                    </SidebarButton>
+                  </>
+                )}
+              </Sidebar>
             </>
           )}
         </AnimatePresence>
@@ -472,15 +551,41 @@ const CatalogForCustomer = () => {
                 </SidebarOpenBtn>
                 <HeaderTitle>Product Collection</HeaderTitle>
               </HeaderLeft>
+
               <Nav>
                 <NavLink onClick={() => navigate('/about')}>About</NavLink>
                 <NavLink onClick={() => navigate('/contact')}>Contact</NavLink>
-                <NotificationIcon>
-                  <FaShoppingCart size={20} />
-                  <Badge>2</Badge>
-                </NotificationIcon>
+
+                {/* Not logged in: Login + Register buttons */}
+                {!user && (
+                  <>
+                    <LoginNavBtn onClick={() => navigate('/login')}>Login</LoginNavBtn>
+                    <RegisterNavBtn onClick={() => navigate('/register')}>Register</RegisterNavBtn>
+                  </>
+                )}
+
+                {/* Customer: cart icon + logout */}
+                {isCustomer && (
+                  <>
+                    <NotificationIcon onClick={() => navigate('/customer/place-order')}>
+                      <FaShoppingCart size={20} />
+                    </NotificationIcon>
+                    <LoginNavBtn onClick={handleLogout}>Logout</LoginNavBtn>
+                  </>
+                )}
+
+                {/* Admin / Staff / Storekeeper: dashboard link + logout */}
+                {isOtherRole && (
+                  <>
+                    <RegisterNavBtn onClick={() => navigate(getDashboardRoute(user.role))}>
+                      My Dashboard
+                    </RegisterNavBtn>
+                    <LoginNavBtn onClick={handleLogout}>Logout</LoginNavBtn>
+                  </>
+                )}
               </Nav>
             </HeaderTop>
+
             <SearchFilterBar>
               <SearchWrapper>
                 <SearchIcon />
@@ -496,7 +601,7 @@ const CatalogForCustomer = () => {
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
                 <option value="all">All Categories</option>
-                <option value="vases">Vases & Decor</option>
+                <option value="vases">Vases &amp; Decor</option>
                 <option value="chairs">Seating</option>
                 <option value="tables">Tables</option>
                 <option value="sofas">Lounge</option>
@@ -520,8 +625,8 @@ const CatalogForCustomer = () => {
                       <ProductPrice>{product.price}</ProductPrice>
                     </ProductHeader>
                     <ProductDesc>{product.desc}</ProductDesc>
-                    <ActionButton onClick={() => navigate('/customer/place-order')}>
-                      Place Order <FaShoppingCart />
+                    <ActionButton onClick={handlePlaceOrder}>
+                      {user ? 'Place Order' : 'Add to Cart'} <FaShoppingCart />
                     </ActionButton>
                   </ProductInfo>
                 </ProductCard>

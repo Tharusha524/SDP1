@@ -352,8 +352,8 @@ const LoginPage = () => {
 
         // Navigate based on role
         const roleRoutes = {
-          admin: '/admin/orders',
-          staff: '/staff/catalog',
+          admin: '/admin/dashboard',
+          staff: '/staff/tasks',
           storekeeper: '/storekeeper/inventory-tracker',
           customer: '/customer/catalog',
         };

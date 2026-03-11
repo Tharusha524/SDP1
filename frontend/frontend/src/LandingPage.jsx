@@ -53,38 +53,15 @@ const Logo = styled.div`
   cursor: pointer;
 `;
 
-const NavRight = styled.div`
-  display: flex;
-  gap: 30px;
-  align-items: center;
-`;
-
-const NavLink = styled.a`
-  color: #ccc;
-  font-size: 0.9rem;
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.3s;
-  letter-spacing: 0.5px;
-  
-  &:hover {
-    color: #fff;
-  }
-  
-  @media (max-width: 768px) {
-    display: none;
-  }
-`;
-
 const BookButton = styled.button`
-  padding: 12px 28px;
+  padding: 16px 42px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   color: #fff;
   border-radius: 30px;
   font-family: 'Manrope', sans-serif;
-  font-size: 0.85rem;
-  letter-spacing: 1px;
+  font-size: 0.95rem;
+  letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
   transition: all 0.4s ease;
@@ -94,6 +71,8 @@ const BookButton = styled.button`
     background: #fff;
     color: #000;
     border-color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(255,255,255,0.15);
   }
 `;
 
@@ -312,10 +291,6 @@ const LandingPage = () => {
           transition={{ duration: 0.8 }}
         >
           <Logo onClick={() => navigate('/')}>Marukawa</Logo>
-          <NavRight>
-            <NavLink onClick={() => navigate('/login')}>Sign In</NavLink>
-            <BookButton onClick={() => navigate('/register')}>Get Started</BookButton>
-          </NavRight>
         </Navbar>
 
         <Hero>
@@ -326,7 +301,7 @@ const LandingPage = () => {
               animate={{ opacity: 1, letterSpacing: '6px' }}
               transition={{ duration: 1, delay: 0.2 }}
             >
-              Excellence in Management
+              Experience the charm
             </SubHeadline>
             <MainHeadline
               initial={{ opacity: 0, y: 30 }}
@@ -343,6 +318,16 @@ const LandingPage = () => {
               Orchestrating seamless inventory solutions for the modern enterprise.
               Precision, elegance, and control at your fingertips.
             </Description>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 1.1 }}
+              style={{ marginTop: '40px' }}
+            >
+              <BookButton onClick={() => navigate('/catalog')}>
+                Get Started
+              </BookButton>
+            </motion.div>
           </HeroContent>
 
           <ScrollIndicator

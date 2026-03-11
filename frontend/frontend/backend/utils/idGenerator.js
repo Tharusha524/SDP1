@@ -133,6 +133,17 @@ const generateAdminId = async (db) => {
   }
 };
 
+const generateNotificationId = async (db) => {
+  try {
+    const [rows] = await db.query('SELECT NotificationID FROM notification ORDER BY NotificationID DESC LIMIT 100');
+    const existingIds = rows.map(row => row.NotificationID);
+    return generateId('NO', existingIds, 3);
+  } catch (error) {
+    const randomNum = Math.floor(Math.random() * 900) + 100;
+    return `NO-${randomNum}`;
+  }
+};
+
 module.exports = {
   generateId,
   generateOrderId,
@@ -144,5 +155,6 @@ module.exports = {
   generateCustomerId,
   generateStaffId,
   generateStorekeeperId,
-  generateAdminId
+  generateAdminId,
+  generateNotificationId
 };

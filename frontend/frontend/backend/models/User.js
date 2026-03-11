@@ -78,10 +78,22 @@ const User = {
           [userId, name, email, password, contact]
         );
       } else if (targetRole === 'customer') {
-        await connection.query(
-          'INSERT INTO Customer (CustomerID, Name, Email, Password, ContactNo, Address) VALUES (?, ?, ?, ?, ?, ?)',
-          [userId, name, email, password, contact, 'TBD']
-        );
+        try {
+          await connection.query(
+            'INSERT INTO Customer (CustomerID, Name, Email, Password, ContactNo, Address) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, name, email, password, contact, 'TBD']
+          );
+        } catch (err) {
+          // If the Customer table schema doesn't include Address column, retry without it
+          if (err && err.code === 'ER_BAD_FIELD_ERROR' && /Address/i.test(err.sqlMessage || '')) {
+            await connection.query(
+              'INSERT INTO Customer (CustomerID, Name, Email, Password, ContactNo) VALUES (?, ?, ?, ?, ?)',
+              [userId, name, email, password, contact]
+            );
+          } else {
+            throw err;
+          }
+        }
       }
 
       await connection.commit();
@@ -218,6 +230,20 @@ const User = {
       return true;
     } catch (error) {
       console.error('Error updating Verification OTP:', error);
+      throw error;
+    }
+  },
+
+  // Update Verification OTP in pending_registrations (used before user is created)
+  updatePendingVerificationOTP: async (email, otp, expiry) => {
+    try {
+      await db.query(
+        'UPDATE pending_registrations SET verification_token = ?, token_expires = ? WHERE email = ?',
+        [otp, expiry, email]
+      );
+      return true;
+    } catch (error) {
+      console.error('Error updating pending Verification OTP:', error);
       throw error;
     }
   },
