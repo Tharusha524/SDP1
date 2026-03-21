@@ -144,6 +144,17 @@ const generateNotificationId = async (db) => {
   }
 };
 
+const generatePaymentId = async (db) => {
+  try {
+    const [rows] = await db.query('SELECT PaymentID FROM payment ORDER BY PaymentID DESC LIMIT 100');
+    const existingIds = rows.map(row => row.PaymentID);
+    return generateId('PAY', existingIds);
+  } catch (error) {
+    const randomNum = Math.floor(Math.random() * 9000) + 1000;
+    return `PAY-${randomNum}`;
+  }
+};
+
 module.exports = {
   generateId,
   generateOrderId,
@@ -156,5 +167,6 @@ module.exports = {
   generateStaffId,
   generateStorekeeperId,
   generateAdminId,
-  generateNotificationId
+  generateNotificationId,
+  generatePaymentId
 };

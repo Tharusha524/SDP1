@@ -19,6 +19,8 @@ import HandleInventory from "./HandleInventory.js";
 import AdminDashboard from "./AdminDashboard.jsx";
 import CatalogForStaff from "./CatalogForStaff.js";
 import CatalogForCustomer from "./CatalogForCustomer.js";
+import PaymentResult from "./PaymentResult";
+import OrderReview from "./OrderReview";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -41,8 +43,13 @@ function AnimatedRoutes() {
         <Route path="/customer/catalog" element={<CatalogForCustomer />} />
         <Route path="/customer/place-order" element={<PlaceOrder />} />
         <Route path="/customer/track-order" element={<TrackOrder />} />
+        <Route path="/customer/order/:orderId" element={<OrderReview />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />
+
+        {/* Payment results (PayHere sandbox) */}
+        <Route path="/payment-success" element={<PaymentResult success={true} />} />
+        <Route path="/payment-failed" element={<PaymentResult success={false} />} />
 
         {/* Admin Management */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />

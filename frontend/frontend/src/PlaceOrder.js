@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaCheckCircle, FaArrowRight, FaArrowLeft } from 'react-icons/fa';
+import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 // --- Global Aesthetics ---
@@ -216,6 +216,9 @@ const PlaceOrder = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  const advanceAmount = totalPrice > 0 ? Math.round(totalPrice * 0.4) : 0;
+  const remainingAmount = totalPrice - advanceAmount;
+
   const customerName = (() => {
     try { return JSON.parse(localStorage.getItem('user'))?.name || ''; }
     catch { return ''; }
@@ -252,9 +255,13 @@ const PlaceOrder = () => {
     setError(null);
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
+    if (totalPrice <= 0) {
+      setError('Please select a product and valid quantity before paying the advance.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch('http://localhost:5000/api/payments/payhere-init', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,11 +274,26 @@ const PlaceOrder = () => {
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setOrderSuccess(data.orderId);
-      } else {
-        setError(data.error || 'Failed to place order. Please try again.');
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Failed to start payment. Please try again.');
+        return;
       }
+
+      // Build and auto-submit PayHere sandbox form
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = data.payhereUrl;
+
+      Object.entries(data.params || {}).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value == null ? '' : String(value);
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
     } catch {
       setError('Network error. Please check your connection and try again.');
     } finally {
@@ -370,10 +392,16 @@ const PlaceOrder = () => {
             </FormGroup>
 
             <PriceBox>
-              <PriceLabel>Total Investment</PriceLabel>
+              <PriceLabel>Order Summary</PriceLabel>
               <PriceValue>
-                {totalPrice > 0 ? `Rs. ${totalPrice.toLocaleString()}` : '—'}
+                {totalPrice > 0 ? `Total: Rs. ${totalPrice.toLocaleString()}` : '—'}
               </PriceValue>
+              {totalPrice > 0 && (
+                <div style={{ marginTop: '10px', fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)' }}>
+                  <div>Advance (40%): <span style={{ color: '#c0a062', fontWeight: 600 }}>Rs. {advanceAmount.toLocaleString()}</span></div>
+                  <div>Remaining (60% on pickup): <span style={{ color: '#f9fafb' }}>Rs. {remainingAmount.toLocaleString()}</span></div>
+                </div>
+              )}
             </PriceBox>
 
             {error && (
@@ -389,7 +417,7 @@ const PlaceOrder = () => {
               disabled={submitting}
               style={{ opacity: submitting ? 0.7 : 1 }}
             >
-              {submitting ? 'Placing Order...' : <><FaShoppingBag /> Confirm Order</>}
+              {submitting ? 'Processing Advance Payment...' : <><FaShoppingBag /> Pay 40% Advance & Confirm</>}
             </SubmitButton>
           </Form>
 

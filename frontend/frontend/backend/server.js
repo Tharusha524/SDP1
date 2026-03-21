@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 dotenv.config();
 const db = require('./config/db');
+const ensurePaymentTable = require('./utils/ensurePaymentTable');
 
 const app = express();
 
@@ -29,6 +30,9 @@ app.get('/', (req, res) => {
 	res.send('<h1>Marukawa Cement Backend</h1><p>Server is running and connected to MySQL.</p>');
 });
 
+// Ensure payment table exists on startup
+ensurePaymentTable();
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
@@ -37,6 +41,7 @@ const inventoryRoutes = require('./routes/inventory');
 const adminRoutes = require('./routes/admin');
 const staffRoutes = require('./routes/staff');
 const notificationRoutes = require('./routes/notifications');
+const paymentRoutes = require('./routes/payments');
 
 // Test SQL connection route
 app.get('/api/test-db', async (req, res) => {
@@ -56,6 +61,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
