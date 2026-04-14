@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBoxes, FaCheckCircle } from 'react-icons/fa';
@@ -177,16 +177,80 @@ const SuccessMessage = styled(motion.div)`
   gap: 10px;
 `;
 
+const SearchRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+`;
+
+const SearchLabel = styled.span`
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+`;
+
+const SearchInput = styled(Input)`
+  width: 220px;
+  text-align: left;
+`;
+
 const HandleInventory = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [allocatedData, setAllocatedData] = useState(null);
-  
-  // Orders data
-  const [orders, setOrders] = useState([
-    { id: 'ORD-0101', customer: 'Kavindu Herath', items: 'Flower Vases', quantity: 20, cement: '', sand: '', stone: '' },
-    { id: 'ORD-0102', customer: 'Nisansala Gamage', items: 'Chairs', quantity: 50, cement: '', sand: '', stone: '' },
-    { id: 'ORD-0103', customer: 'Sandaruwan Perera', items: 'Sofas', quantity: 2, cement: '', sand: '', stone: '' },
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+
+  const API_BASE = 'http://localhost:5000';
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in as admin or staff to handle inventory.');
+      setLoading(false);
+      return;
+    }
+
+    const headers = { 'Authorization': `Bearer ${token}` };
+
+    // Load orders for allocation inputs
+    fetch(`${API_BASE}/api/orders`, { headers })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.orders)) {
+          const mapped = data.orders.map(o => ({
+            id: o.OrderID,
+            customer: o.CustomerName || 'Unknown',
+            items: o.Items || '',
+            quantity: o.TotalQuantity || 0,
+            cement: '',
+            sand: '',
+            stone: ''
+          }));
+          setOrders(mapped);
+        } else {
+          setError('Failed to load orders for inventory handling.');
+        }
+      })
+      .catch(() => setError('Network error while loading orders.'))
+      .finally(() => setLoading(false));
+
+    // Load existing allocated inventory summaries so table always shows all allocations
+    fetch(`${API_BASE}/api/inventory/allocations`, { headers })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.allocations)) {
+          setAllocatedData(data.allocations);
+        }
+      })
+      .catch(() => {
+        // ignore, keep page usable even if summary load fails
+      });
+  }, []);
 
   const handleInputChange = (orderId, field, value) => {
     // Prevent negative values
@@ -197,18 +261,65 @@ const HandleInventory = () => {
     ));
   };
 
+  const normalizedSearch = orderSearch.trim().toLowerCase();
+  const filteredOrders = normalizedSearch
+    ? orders.filter(order => String(order.id).toLowerCase().includes(normalizedSearch))
+    : orders;
+
+  const filteredAllocatedData = allocatedData && normalizedSearch
+    ? allocatedData.filter(row => String(row.OrderID || row.id).toLowerCase().includes(normalizedSearch))
+    : allocatedData;
+
   const handleAllocate = () => {
-    // Create allocated data snapshot
-    const allocated = orders.map(order => ({
-      ...order,
-      cement: order.cement || '0',
-      sand: order.sand || '0',
-      stone: order.stone || '0'
-    }));
-    
-    setAllocatedData(allocated);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('You must be logged in to allocate inventory.');
+      return;
+    }
+
+    const meaningful = orders.filter(o =>
+      (o.cement && parseFloat(o.cement) > 0) ||
+      (o.sand && parseFloat(o.sand) > 0) ||
+      (o.stone && parseFloat(o.stone) > 0)
+    );
+
+    if (meaningful.length === 0) {
+      setError('Enter at least one material quantity before allocating.');
+      return;
+    }
+
+    const payload = {
+      allocations: meaningful.map(o => ({
+        orderId: o.id,
+        cement: o.cement || '0',
+        sand: o.sand || '0',
+        stone: o.stone || '0'
+      }))
+    };
+
+    fetch(`${API_BASE}/api/inventory/allocate`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          // Backend returns full list of allocations; update table so it always shows all allocated inventory
+          if (Array.isArray(data.allocations)) {
+            setAllocatedData(data.allocations);
+          }
+          setError('');
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 3000);
+        } else {
+          setError(data.error || 'Failed to save allocation to database.');
+        }
+      })
+      .catch(() => setError('Network error while saving allocation.'));
   };
 
   return (
@@ -234,6 +345,14 @@ const HandleInventory = () => {
         </Subtitle>
       </Header>
 
+      {error && (
+        <p style={{ color: '#f97373', marginBottom: '16px' }}>{error}</p>
+      )}
+
+      {loading && (
+        <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading orders...</p>
+      )}
+
       {/* Orders Display Table */}
       <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <SectionTitle>Customer Orders</SectionTitle>
@@ -247,7 +366,7 @@ const HandleInventory = () => {
             </tr>
           </thead>
           <tbody>
-            {orders.map(order => (
+            {filteredOrders.map(order => (
               <tr key={order.id}>
                 <td style={{ fontWeight: 600, color: '#c0a062' }}>{order.id}</td>
                 <td>{order.customer}</td>
@@ -262,6 +381,15 @@ const HandleInventory = () => {
       {/* Allocation Input Table */}
       <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
         <SectionTitle>Allocate Raw Materials</SectionTitle>
+        <SearchRow>
+          <SearchLabel>Search by Order ID</SearchLabel>
+          <SearchInput
+            type="text"
+            placeholder="Enter Order ID..."
+            value={orderSearch}
+            onChange={(e) => setOrderSearch(e.target.value)}
+          />
+        </SearchRow>
         <Table>
           <thead>
             <tr>
@@ -272,7 +400,7 @@ const HandleInventory = () => {
             </tr>
           </thead>
           <tbody>
-            {orders.map(order => (
+            {filteredOrders.map(order => (
               <tr key={order.id}>
                 <td style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.15)' }}>
                   {order.id}
@@ -320,7 +448,7 @@ const HandleInventory = () => {
 
       {/* Allocated Inventory Display Table */}
       <AnimatePresence>
-        {allocatedData && (
+        {filteredAllocatedData && filteredAllocatedData.length > 0 && (
           <ContentCard 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
@@ -332,28 +460,20 @@ const HandleInventory = () => {
               <thead>
                 <tr>
                   <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>Items</th>
-                  <th>Cement (units)</th>
-                  <th>Sand (units)</th>
-                  <th>Stone Powder (units)</th>
+                  <th>Summary</th>
+                  <th>Allocation Type</th>
+                  <th>Status</th>
+                  <th>Last Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {allocatedData.map(order => (
-                  <tr key={order.id}>
-                    <td style={{ fontWeight: 600, color: '#c0a062' }}>{order.id}</td>
-                    <td>{order.customer}</td>
-                    <td>{order.items}</td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                      {order.cement}
-                    </td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                      {order.sand}
-                    </td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                      {order.stone}
-                    </td>
+                {filteredAllocatedData.map(row => (
+                  <tr key={row.AllocationID || row.id}>
+                    <td style={{ fontWeight: 600, color: '#c0a062' }}>{row.OrderID || row.id}</td>
+                    <td>{row.SummaryText || row.summary || '-'}</td>
+                    <td>{row.AllocationType || '-'}</td>
+                    <td>{row.Status || '-'}</td>
+                    <td>{row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString() : '-'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -9,6 +9,7 @@ import LandingPage from "./LandingPage.jsx";
 import ForgotPassword from "./ForgotPassword.js";
 import PlaceOrder from "./PlaceOrder.js";
 import TrackOrder from "./TrackOrder.js";
+import CustomerProfile from "./CustomerProfile.jsx";
 import AboutUs from "./AboutUs.jsx";
 import ContactUs from "./ContactUs.js";
 import CatalogForAdmin from "./CatalogForAdmin.js";
@@ -21,6 +22,7 @@ import CatalogForStaff from "./CatalogForStaff.js";
 import CatalogForCustomer from "./CatalogForCustomer.js";
 import PaymentResult from "./PaymentResult";
 import OrderReview from "./OrderReview";
+import PaymentCheckout from "./PaymentCheckout.jsx";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -42,7 +44,9 @@ function AnimatedRoutes() {
         {/* Customer Journey */}
         <Route path="/customer/catalog" element={<CatalogForCustomer />} />
         <Route path="/customer/place-order" element={<PlaceOrder />} />
+        <Route path="/customer/payment" element={<PaymentCheckout />} />
         <Route path="/customer/track-order" element={<TrackOrder />} />
+        <Route path="/customer/profile" element={<CustomerProfile />} />
         <Route path="/customer/order/:orderId" element={<OrderReview />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />

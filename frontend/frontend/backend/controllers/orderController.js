@@ -1,14 +1,25 @@
 const db = require('../config/db');
 const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../utils/idGenerator');
 
+const getEstimatedCompletionDate = (baseDays = 7) => {
+  const now = new Date();
+  now.setDate(now.getDate() + baseDays);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // GET /api/orders — all orders with customer name, items, totals (admin/staff)
 exports.getAllOrders = async (req, res) => {
   try {
     const [orders] = await db.query(`
-      SELECT o.OrderID,
-             COALESCE(c.Name, o.CustomerID) AS CustomerName,
-             o.OrderDate,
-             o.Status,
+            SELECT o.OrderID,
+              COALESCE(c.Name, o.CustomerID) AS CustomerName,
+              o.OrderDate,
+              o.Status,
+              o.Details,
+              o.EstimatedCompletionDate,
              COALESCE(SUM(oi.Quantity * oi.Price), 0)   AS TotalPrice,
              COALESCE(SUM(oi.Quantity), 0)               AS TotalQuantity,
              GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
@@ -16,7 +27,7 @@ exports.getAllOrders = async (req, res) => {
       LEFT JOIN customer c  ON o.CustomerID  = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID    = oi.OrderID
       LEFT JOIN product p   ON oi.ProductID  = p.ProductID
-      GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status
+      GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status, o.Details, o.EstimatedCompletionDate
       ORDER BY o.OrderDate DESC
     `);
     res.json({ success: true, orders });
@@ -34,10 +45,11 @@ exports.getMyOrders = async (req, res) => {
     }
 
     const [orders] = await db.query(
-      `SELECT o.OrderID,
+            `SELECT o.OrderID,
               COALESCE(c.Name, o.CustomerID) AS CustomerName,
               o.OrderDate,
               o.Status,
+              o.EstimatedCompletionDate,
               COALESCE(SUM(oi.Quantity * oi.Price), 0)   AS TotalPrice,
               COALESCE(SUM(oi.Quantity), 0)               AS TotalQuantity,
               GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
@@ -46,7 +58,7 @@ exports.getMyOrders = async (req, res) => {
        LEFT JOIN orderitem oi ON o.OrderID    = oi.OrderID
        LEFT JOIN product p   ON oi.ProductID  = p.ProductID
        WHERE o.CustomerID = ?
-       GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status
+      GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status, o.EstimatedCompletionDate
        ORDER BY o.OrderDate DESC`,
       [user.id]
     );
@@ -69,12 +81,13 @@ exports.getOrderById = async (req, res) => {
     const { orderId } = req.params;
 
     const [rows] = await db.query(
-      `SELECT o.OrderID,
+            `SELECT o.OrderID,
               o.CustomerID,
               COALESCE(c.Name, o.CustomerID) AS CustomerName,
               o.OrderDate,
               o.Status,
               o.Details,
+              o.EstimatedCompletionDate,
               COALESCE(SUM(oi.Quantity * oi.Price), 0) AS TotalPrice,
               COALESCE(SUM(oi.Quantity), 0)           AS TotalQuantity,
               GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items,
@@ -85,7 +98,7 @@ exports.getOrderById = async (req, res) => {
        LEFT JOIN product p    ON oi.ProductID  = p.ProductID
        LEFT JOIN payment pay  ON pay.OrderID   = o.OrderID
        WHERE o.OrderID = ? AND o.CustomerID = ?
-       GROUP BY o.OrderID, o.CustomerID, c.Name, o.OrderDate, o.Status, o.Details`,
+      GROUP BY o.OrderID, o.CustomerID, c.Name, o.OrderDate, o.Status, o.Details, o.EstimatedCompletionDate`,
       [orderId, user.id]
     );
 
@@ -134,10 +147,12 @@ exports.createOrder = async (req, res) => {
     const orderId = await generateOrderId(db);
     const orderItemId = await generateOrderItemId(db);
 
+    const estimatedCompletionDate = getEstimatedCompletionDate(7);
+
     // Insert into orders table (3NF schema: Details instead of Address/SpecialInstructions)
     await db.query(
-      'INSERT INTO orders (OrderID, CustomerID, Status, Details) VALUES (?, ?, ?, ?)',
-      [orderId, user.id, 'Pending', details || '']
+      'INSERT INTO orders (OrderID, CustomerID, Status, Details, EstimatedCompletionDate) VALUES (?, ?, ?, ?, ?)',
+      [orderId, user.id, 'Pending', details || '', estimatedCompletionDate]
     );
 
     // Insert into orderitem table with price snapshot

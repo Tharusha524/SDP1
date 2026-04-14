@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import CustomerProfile from './CustomerProfile.jsx';
 import VerifyEmail from './VerifyEmail.jsx';
 import ResetPassword from './ResetPassword.jsx';
 import ForgotPassword from './ForgotPassword.js';
@@ -35,6 +36,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard user={user} setUser={setUser} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/profile"
+          element={
+            <ProtectedRoute>
+              <CustomerProfile user={user} />
             </ProtectedRoute>
           }
         />

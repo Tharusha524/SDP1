@@ -2,6 +2,15 @@ const db = require('../config/db');
 const crypto = require('crypto');
 const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../utils/idGenerator');
 
+const getEstimatedCompletionDate = (baseDays = 7) => {
+  const now = new Date();
+  now.setDate(now.getDate() + baseDays);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // POST /api/payments/payhere-init
 // Creates a PayHere sandbox payment session for 40% advance.
 // IMPORTANT: This step also creates the order and order item rows immediately
@@ -70,12 +79,12 @@ exports.payhereInit = async (req, res) => {
     // so that MySQL always has the order details, even if PayHere cannot call
     // our notify_url (common on localhost setups).
     const orderId = await generateOrderId(db);
-
     const orderItemId = await generateOrderItemId(db);
+    const estimatedCompletionDate = getEstimatedCompletionDate(7);
 
     await db.query(
-      'INSERT INTO orders (OrderID, CustomerID, Status, Details) VALUES (?, ?, ?, ?)',
-      [orderId, user.id, 'Pending', details || '']
+      'INSERT INTO orders (OrderID, CustomerID, Status, Details, EstimatedCompletionDate) VALUES (?, ?, ?, ?, ?)',
+      [orderId, user.id, 'Pending', details || '', estimatedCompletionDate]
     );
 
     await db.query(
@@ -237,5 +246,79 @@ exports.payhereReturn = async (req, res) => {
   } catch (err) {
     console.error('Error handling PayHere return:', err);
     return res.redirect(`${frontendBase}/payment-failed`);
+  }
+};
+
+// POST /api/payments/card-direct
+// Demo card payment flow that does NOT call PayHere.
+// Creates the order, order item, and a PAID payment row directly in MySQL
+// and returns the new orderId to the frontend.
+exports.cardDirectPayment = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user || user.role !== 'customer') {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Only customers can place orders' });
+    }
+
+    const { productId, quantity, details } = req.body;
+
+    if (!productId || !quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Product and positive quantity are required'
+      });
+    }
+
+    const [products] = await db.query(
+      'SELECT ProductID, Name, Price FROM product WHERE ProductID = ? AND IsActive = 1',
+      [productId]
+    );
+
+    if (products.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, error: 'Product not found or inactive' });
+    }
+
+    const product = products[0];
+
+    const totalPrice = Number(product.Price) * quantity;
+    const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
+
+    const orderId = await generateOrderId(db);
+    const orderItemId = await generateOrderItemId(db);
+    const paymentId = await generatePaymentId(db);
+    const estimatedCompletionDate = getEstimatedCompletionDate(7);
+
+    await db.query(
+      'INSERT INTO orders (OrderID, CustomerID, Status, Details, EstimatedCompletionDate) VALUES (?, ?, ?, ?, ?)',
+      [orderId, user.id, 'Pending', details || '', estimatedCompletionDate]
+    );
+
+    await db.query(
+      'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, Price) VALUES (?, ?, ?, ?, ?)',
+      [orderItemId, orderId, product.ProductID, quantity, product.Price]
+    );
+
+    await db.query(
+      'INSERT INTO payment (PaymentID, OrderID, Amount, Method, Status) VALUES (?, ?, ?, ?, ?)',
+      [paymentId, orderId, advanceAmount, 'Card (Demo)', 'Paid']
+    );
+
+    return res.json({
+      success: true,
+      orderId,
+      totalPrice,
+      advanceAmount,
+      estimatedCompletionDate
+    });
+  } catch (err) {
+    console.error('Error creating direct card payment:', err);
+    return res
+      .status(500)
+      .json({ success: false, error: 'Failed to complete payment' });
   }
 };

@@ -356,9 +356,13 @@ export default function CatalogManage() {
 
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch('http://localhost:5000/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
@@ -417,9 +421,13 @@ export default function CatalogManage() {
     e.preventDefault();
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(`http://localhost:5000/api/products/${formData.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
@@ -450,8 +458,13 @@ export default function CatalogManage() {
     setLoading(true);
     try {
       console.log('Deleting product:', id);
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(`http://localhost:5000/api/products/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
       });
 
       const data = await response.json();

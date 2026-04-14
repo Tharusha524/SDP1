@@ -174,6 +174,26 @@ const NavLink = styled.a`
 
   &:hover { color: #c0a062; }
 `;
+const ProfileCircle = styled.button`
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f7f4e9;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+  }
+`;
 
 const NavAuthButton = styled.button`
   padding: 10px 22px;
@@ -369,61 +389,48 @@ const Footer = styled.footer`
 `;
 
 // --- Data ---
+// Fallback products used only if database has no rows
 const PRODUCTS = [
   {
-    title: "Flower Vase",
-    price: "Rs.5500",
-    desc: "Hand-blown glass with gold leaf detailing. A statement piece for executive suites.",
-    img: img1,
-    type: "vases"
-  },
-  {
-    title: "Flower vase",
-    price: "Rs. 12,500",
-    desc: "Velvet upholstery with solid oak legs. Ergonomically designed for luxury.",
-    img: img2,
-    type: "chairs"
-  },
-  {
-    title: "Flower vase",
-    price: "Rs. 28,000",
-    desc: "Tempered smoked glass top with matte black metal frame.",
-    img: img3,
-    type: "tables"
-  },
-  {
-    title: "Elegant Decor Piece",
-    price: "Rs. 18,500",
-    desc: "Modern ceramic design with matte finish. Perfect for contemporary spaces.",
-    img: img4,
-    type: "vases"
-  },
-  {
-    title: "sofa set",
-    price: "Rs. 22,000",
-    desc: "Contemporary abstract art piece that elevates any interior.",
+    title: "Sofa Set",
+    price: "Rs. 48,000",
+    desc: "Premium fabric sofa set ideal for modern living rooms.",
     img: img5,
-    type: "vases"
+    type: "sofas"
   },
   {
-    title: "Table & bench",
-    price: "Rs. 15,750",
-    desc: "Handcrafted with intricate patterns. A true masterpiece.",
-    img: img6,
-    type: "vases"
-  },
-  {
-    title: "large flower vase",
-    price: "Rs. 32,500",
-    desc: "Luxury decor for executive spaces. Makes a bold statement.",
+    title: "Large Flower Vase",
+    price: "Rs. 20,000",
+    desc: "Tall decorative flower vase that becomes a centerpiece in any room.",
     img: img7,
     type: "vases"
   },
   {
-    title: "Classic Ornament",
-    price: "Rs. 19,900",
-    desc: "Timeless design with elegant curves. A collector's choice.",
+    title: "Small Flower Vase",
+    price: "Rs. 4,000",
+    desc: "Compact flower vase, perfect for desks and side tables.",
+    img: img3,
+    type: "vases"
+  },
+  {
+    title: "Ornaments",
+    price: "Rs. 5,000",
+    desc: "Elegant decorative ornaments to enhance your interior style.",
     img: img8,
+    type: "vases"
+  },
+  {
+    title: "Medium Flower Vase",
+    price: "Rs. 10,000",
+    desc: "Medium-sized vase ideal for coffee tables and consoles.",
+    img: img1,
+    type: "vases"
+  },
+  {
+    title: "Flower Vase",
+    price: "Rs. 12,500",
+    desc: "Classic flower vase suitable for everyday use.",
+    img: img2,
     type: "vases"
   }
 ];
@@ -441,6 +448,15 @@ const CatalogForCustomer = () => {
     if (stored) {
       try { setUser(JSON.parse(stored)); } catch (e) { setUser(null); }
     }
+  }, []);
+
+  // Products from backend (real MySQL products table)
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    fetch('http://localhost:5000/api/products')
+      .then(r => r.json())
+      .then(data => { if (data.success) setProducts(data.products); })
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {
@@ -461,16 +477,64 @@ const CatalogForCustomer = () => {
     return roleRoutes[role] || '/catalog';
   };
 
-  // Guard: redirect to login if not authenticated customer
-  const handlePlaceOrder = () => {
+  // Place order for a specific product; require login
+  const handlePlaceOrder = (product) => {
     if (!user) { navigate('/login'); return; }
-    navigate('/customer/place-order');
+
+    const productId = product.ProductID;
+    const productName = product.Name || product.title;
+    const rawPrice = (product.Price != null ? product.Price : product.price);
+    let unitPrice = 0;
+
+    if (typeof rawPrice === 'number') {
+      unitPrice = rawPrice;
+    } else if (typeof rawPrice === 'string') {
+      const numeric = rawPrice.replace(/[^0-9.]/g, '');
+      unitPrice = Number(numeric) || 0;
+    }
+
+    const productPrice = unitPrice;
+    const productDesc = product.Description || product.desc;
+
+    navigate('/customer/place-order', {
+      state: { productId, productName, productPrice, unitPrice, productDesc }
+    });
   };
 
-  const filteredProducts = PRODUCTS.filter(product => {
-    const matchesSearch = product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.desc.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || product.type === categoryFilter;
+  // Prefer real products from DB; filter to the six configured items by image, then fall back to static list if needed
+  // Use all active products from DB when available; otherwise fall back to static list
+  const dbProducts = products || [];
+
+  const sourceProducts = (dbProducts && dbProducts.length > 0) ? dbProducts : PRODUCTS;
+
+  const getProductImage = (product) => {
+    if (product.Image) {
+      // If backend stored a data URL or full URL, use it directly
+      if (typeof product.Image === 'string' && (product.Image.startsWith('data:') || product.Image.startsWith('http'))) {
+        return product.Image;
+      }
+
+      // Otherwise map known filenames to bundled assets
+      const map = {
+        'Gemini_Generated_Image_elt1ngelt1ngelt1.png': img5,
+        'Gemini_Generated_Image_qoa691qoa691qoa6.png': img7,
+        'login-hero.png': img3,
+        'register-hero.png': img8,
+        'WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg': img1,
+        'WhatsApp Image 2026-01-20 at 09.06.34.jpeg': img2,
+      };
+      return map[product.Image] || img1;
+    }
+    return product.img || img1;
+  };
+
+  const filteredProducts = sourceProducts.filter(product => {
+    const name = (product.Name || product.title || '').toLowerCase();
+    const desc = (product.Description || product.desc || '').toLowerCase();
+    const type = (product.Category || product.type || 'all').toLowerCase();
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = name.includes(q) || desc.includes(q);
+    const matchesCategory = categoryFilter === 'all' || type === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
@@ -564,12 +628,18 @@ const CatalogForCustomer = () => {
                   </>
                 )}
 
-                {/* Customer: cart icon + logout */}
+                {/* Customer: cart icon + profile + logout */}
                 {isCustomer && (
                   <>
                     <NotificationIcon onClick={() => navigate('/customer/place-order')}>
                       <FaShoppingCart size={20} />
                     </NotificationIcon>
+                    <ProfileCircle
+                      onClick={() => navigate('/customer/profile')}
+                      title="My profile"
+                    >
+                      {(user?.name || user?.username || 'C').charAt(0).toUpperCase()}
+                    </ProfileCircle>
                     <LoginNavBtn onClick={handleLogout}>Logout</LoginNavBtn>
                   </>
                 )}
@@ -618,14 +688,19 @@ const CatalogForCustomer = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.1 }}
                 >
-                  <ProductImg src={product.img} alt={product.title} />
+                  <ProductImg
+                    src={getProductImage(product)}
+                    alt={product.Name || product.title}
+                  />
                   <ProductInfo>
                     <ProductHeader>
-                      <ProductTitle>{product.title}</ProductTitle>
-                      <ProductPrice>{product.price}</ProductPrice>
+                      <ProductTitle>{product.Name || product.title}</ProductTitle>
+                      <ProductPrice>
+                        {product.Price ? `Rs. ${Number(product.Price).toLocaleString()}` : product.price}
+                      </ProductPrice>
                     </ProductHeader>
-                    <ProductDesc>{product.desc}</ProductDesc>
-                    <ActionButton onClick={handlePlaceOrder}>
+                    <ProductDesc>{product.Description || product.desc}</ProductDesc>
+                    <ActionButton onClick={() => handlePlaceOrder(product)}>
                       {user ? 'Place Order' : 'Add to Cart'} <FaShoppingCart />
                     </ActionButton>
                   </ProductInfo>

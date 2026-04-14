@@ -56,10 +56,10 @@ exports.getAllTasks = async (req, res) => {
     const [tasks] = await db.query(`
       SELECT t.TaskID,
              t.StaffID,
+             t.OrderID,
              COALESCE(s.Name, t.StaffID) AS StaffName,
              t.Description,
              t.Status,
-             t.Priority,
              t.AssignedDate
       FROM task t
       LEFT JOIN staff s ON t.StaffID = s.StaffID
@@ -73,7 +73,7 @@ exports.getAllTasks = async (req, res) => {
 
 // POST /api/admin/tasks
 exports.createTask = async (req, res) => {
-  const { staffId, description, priority } = req.body;
+  const { staffId, description, orderId } = req.body;
   if (!staffId || !description || !description.trim()) {
     return res.status(400).json({ success: false, error: 'staffId and description are required' });
   }
@@ -81,8 +81,8 @@ exports.createTask = async (req, res) => {
     const taskId = await generateTaskId(db);
     const adminId = req.user.id || null;
     await db.query(
-      "INSERT INTO task (TaskID, AdminID, StaffID, Description, Status, Priority) VALUES (?, ?, ?, ?, 'Pending', ?)",
-      [taskId, adminId, staffId, description.trim(), priority || 'Medium']
+      "INSERT INTO task (TaskID, AdminID, StaffID, OrderID, Description, Status) VALUES (?, ?, ?, ?, ?, 'Pending')",
+      [taskId, adminId, staffId, orderId || null, description.trim()]
     );
     res.status(201).json({ success: true, taskId, message: 'Task assigned successfully' });
   } catch (err) {
@@ -94,14 +94,13 @@ exports.createTask = async (req, res) => {
 exports.getInventory = async (req, res) => {
   try {
     const [inventory] = await db.query(`
-      SELECT i.InventoryID,
-             COALESCE(p.Name, 'Unknown') AS ProductName,
-             i.AvailableQuantity,
-             i.MinimumThreshold,
-             i.LastUpdated
-      FROM inventory i
-      LEFT JOIN product p ON i.ProductID = p.ProductID
-      ORDER BY i.InventoryID
+      SELECT InventoryID,
+             InventoryName AS ProductName,
+             AvailableQuantity,
+             MinimumThreshold,
+             LastUpdated
+      FROM inventory
+      ORDER BY InventoryID
     `);
     res.json({ success: true, inventory });
   } catch (err) {
@@ -132,16 +131,74 @@ exports.getOrdersReport = async (req, res) => {
   }
 };
 
+const { generateNotificationId } = require('../utils/idGenerator');
+const { sendOrderStatusUpdateEmail } = require('../utils/emailService');
+
 // PATCH /api/admin/orders/:id/status
 exports.updateOrderStatus = async (req, res) => {
-  const { status } = req.body;
+  const { status, estimatedCompletionDate } = req.body;
   const VALID_STATUSES = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({ success: false, error: 'Invalid status value' });
   }
   try {
-    const [result] = await db.query('UPDATE orders SET Status = ? WHERE OrderID = ?', [status, req.params.id]);
+    let sql = 'UPDATE orders SET Status = ?';
+    const params = [status];
+
+    if (estimatedCompletionDate) {
+      sql += ', EstimatedCompletionDate = ?';
+      params.push(estimatedCompletionDate);
+    }
+
+    sql += ' WHERE OrderID = ?';
+    params.push(req.params.id);
+
+    const [result] = await db.query(sql, params);
     if (result.affectedRows === 0) return res.status(404).json({ success: false, error: 'Order not found' });
+
+    // Fetch customer user + order info for notification/email
+    const [[orderRow]] = await db.query(
+      `SELECT o.OrderID, o.CustomerID, o.Status, o.Details, o.EstimatedCompletionDate,
+              u.id AS UserID, u.email AS Email, COALESCE(c.Name, u.email) AS CustomerName
+       FROM orders o
+       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
+       LEFT JOIN users u ON o.CustomerID = u.id
+       WHERE o.OrderID = ?
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (orderRow && orderRow.UserID) {
+      // In-app notification for customer
+      try {
+        const notifId = await generateNotificationId(db);
+        const message = `Your order ${orderRow.OrderID} status has been updated to ${status}.`;
+        await db.query(
+          `INSERT INTO notification (NotificationID, Message, Type, ReceiverID, IsRead, RelatedID)
+           VALUES (?, ?, 'Order Update', ?, 0, ?)`,
+          [notifId, message, orderRow.UserID, orderRow.OrderID]
+        );
+      } catch (e) {
+        console.error('Failed to create customer order update notification (admin):', e.message || e);
+      }
+
+      // Email notification for customer
+      if (orderRow.Email) {
+        try {
+          await sendOrderStatusUpdateEmail({
+            toEmail: orderRow.Email,
+            name: orderRow.CustomerName,
+            orderId: orderRow.OrderID,
+            status,
+            details: orderRow.Details,
+            estimatedCompletionDate: orderRow.EstimatedCompletionDate || estimatedCompletionDate
+          });
+        } catch (e) {
+          console.error('Failed to send order status update email (admin):', e.message || e);
+        }
+      }
+    }
+
     res.json({ success: true, message: 'Order status updated' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

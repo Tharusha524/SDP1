@@ -86,7 +86,7 @@ const initDB = async () => {
     `);
         console.log('Order Items table ready.');
 
-        // Create task table
+        // Create task table (without priority column)
         await connection.query(`
       CREATE TABLE IF NOT EXISTS task (
         TaskID VARCHAR(20) PRIMARY KEY,
@@ -97,13 +97,29 @@ const initDB = async () => {
         AssignedDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         CompletedDate TIMESTAMP NULL,
         Status ENUM('Pending', 'In Progress', 'Completed', 'Cancelled') DEFAULT 'Pending',
-        Priority ENUM('Low', 'Medium', 'High') DEFAULT 'Medium',
         FOREIGN KEY (AdminID) REFERENCES users(id),
         FOREIGN KEY (StaffID) REFERENCES staff(StaffID),
         FOREIGN KEY (OrderID) REFERENCES orders(OrderID)
       )
     `);
         console.log('Task table ready.');
+
+        // Create inventory_allocation table (one row per order with text summary)
+        await connection.query(`
+      CREATE TABLE IF NOT EXISTS inventory_allocation (
+        AllocationID VARCHAR(20) PRIMARY KEY,
+        OrderID VARCHAR(20) NOT NULL,
+        SummaryText VARCHAR(500),
+        AllocationType ENUM('Production', 'Sample', 'Waste', 'Other') DEFAULT 'Production',
+        Status ENUM('Allocated', 'Reversed') DEFAULT 'Allocated',
+        AllocatedBy VARCHAR(20) NOT NULL,
+        CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (OrderID) REFERENCES orders(OrderID),
+        FOREIGN KEY (AllocatedBy) REFERENCES users(id)
+      )
+    `);
+        console.log('Inventory allocation table ready.');
 
         console.log('Database initialization complete!');
     } catch (err) {

@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 const db = require('./config/db');
 const ensurePaymentTable = require('./utils/ensurePaymentTable');
+const ensureOrderEstimatedDate = require('./utils/ensureOrderEstimatedDate');
 
 const app = express();
 
@@ -30,8 +31,9 @@ app.get('/', (req, res) => {
 	res.send('<h1>Marukawa Cement Backend</h1><p>Server is running and connected to MySQL.</p>');
 });
 
-// Ensure payment table exists on startup
+// Ensure payment table and order estimated date column exist on startup
 ensurePaymentTable();
+ensureOrderEstimatedDate();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -42,6 +44,7 @@ const adminRoutes = require('./routes/admin');
 const staffRoutes = require('./routes/staff');
 const notificationRoutes = require('./routes/notifications');
 const paymentRoutes = require('./routes/payments');
+const customerRoutes = require('./routes/customers');
 
 // Test SQL connection route
 app.get('/api/test-db', async (req, res) => {
@@ -62,6 +65,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/customers', customerRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // --- Global Aesthetics ---
 const GlobalStyle = createGlobalStyle`
@@ -209,8 +209,15 @@ const OrderId = styled.div`
 
 const PlaceOrder = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const preselected = (location && location.state) || {};
+
   const [products, setProducts] = useState([]);
-  const [formData, setFormData] = useState({ product: '', details: '', quantity: 1 });
+  const [formData, setFormData] = useState({
+    product: preselected.productId || '',
+    details: preselected.productDesc || '',
+    quantity: 1
+  });
   const [totalPrice, setTotalPrice] = useState(0);
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -224,7 +231,7 @@ const PlaceOrder = () => {
     catch { return ''; }
   })();
 
-  // Fetch real products from DB on mount
+  // Fetch real products from DB on mount (used for price lookup)
   useEffect(() => {
     fetch('http://localhost:5000/api/products')
       .then(r => r.json())
@@ -232,15 +239,36 @@ const PlaceOrder = () => {
       .catch(() => {});
   }, []);
 
-  // Recalculate price from real product price
+  // Recalculate price from product price (DB first, then numeric price from catalog state)
   useEffect(() => {
-    if (formData.product && formData.quantity > 0) {
-      const found = products.find(p => p.ProductID === formData.product);
-      setTotalPrice(found ? found.Price * formData.quantity : 0);
-    } else {
+    if (formData.quantity <= 0) {
       setTotalPrice(0);
+      return;
     }
-  }, [formData.product, formData.quantity, products]);
+
+    let unitPrice = 0;
+
+    // Prefer real price from DB when productId is known
+    if (formData.product && products && products.length > 0) {
+      const found = products.find(p => p.ProductID === formData.product);
+      if (found && found.Price != null) {
+        unitPrice = Number(found.Price) || 0;
+      }
+    }
+
+    // Fallback: use numeric price passed from catalog (unitPrice), then productPrice
+    if (!unitPrice) {
+      const fallbackPrice = preselected.unitPrice ?? preselected.productPrice;
+      if (typeof fallbackPrice === 'number') {
+        unitPrice = fallbackPrice;
+      } else if (typeof fallbackPrice === 'string') {
+        const numeric = fallbackPrice.replace(/[^0-9.]/g, '');
+        unitPrice = Number(numeric) || 0;
+      }
+    }
+
+    setTotalPrice(unitPrice > 0 ? unitPrice * formData.quantity : 0);
+  }, [formData.product, formData.quantity, products, preselected.unitPrice, preselected.productPrice]);
 
   const handleInputChange = (e) => {
     const { id, value } = e.target;
@@ -250,55 +278,33 @@ const PlaceOrder = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const selectedProductName = (() => {
+    if (preselected.productName) return preselected.productName;
+    const found = products.find(p => p.ProductID === formData.product);
+    return found ? found.Name : '';
+  })();
+
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError(null);
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
-    if (totalPrice <= 0) {
+    if (totalPrice <= 0 || !formData.product) {
       setError('Please select a product and valid quantity before paying the advance.');
       return;
     }
     setSubmitting(true);
-    try {
-      const res = await fetch('http://localhost:5000/api/payments/payhere-init', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          productId: formData.product,
-          quantity: formData.quantity,
-          details: formData.details
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Failed to start payment. Please try again.');
-        return;
+    navigate('/customer/payment', {
+      state: {
+        productId: formData.product,
+        quantity: formData.quantity,
+        details: formData.details,
+        productName: selectedProductName,
+        totalPrice,
+        advanceAmount,
+        remainingAmount
       }
-
-      // Build and auto-submit PayHere sandbox form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = data.payhereUrl;
-
-      Object.entries(data.params || {}).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value == null ? '' : String(value);
-        form.appendChild(input);
-      });
-
-      document.body.appendChild(form);
-      form.submit();
-    } catch {
-      setError('Network error. Please check your connection and try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   return (
@@ -349,22 +355,14 @@ const PlaceOrder = () => {
             </FormGroup>
 
             <FormGroup>
-              <Label htmlFor="product"><FaListUl size={12} /> Product Name</Label>
-              <Select
-                id="product"
-                value={formData.product}
-                onChange={handleInputChange}
-                required
-              >
-                <option value="" disabled>
-                  {products.length === 0 ? 'Loading products...' : '-- Select Product --'}
-                </option>
-                {products.map(p => (
-                  <option key={p.ProductID} value={p.ProductID}>
-                    {p.Name} — Rs. {Number(p.Price).toLocaleString()}
-                  </option>
-                ))}
-              </Select>
+              <Label htmlFor="productname"><FaListUl size={12} /> Product Name</Label>
+              <Input
+                id="productname"
+                type="text"
+                value={selectedProductName}
+                readOnly
+                style={{ opacity: 0.85, cursor: 'not-allowed' }}
+              />
             </FormGroup>
 
             <FormGroup>
@@ -420,21 +418,6 @@ const PlaceOrder = () => {
               {submitting ? 'Processing Advance Payment...' : <><FaShoppingBag /> Pay 40% Advance & Confirm</>}
             </SubmitButton>
           </Form>
-
-          <AnimatePresence>
-            {orderSuccess && (
-              <SuccessOverlay
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                transition={{ duration: 0.5 }}
-              >
-                <FaCheckCircle size={30} style={{ marginBottom: '15px' }} />
-                <div>Your order has been secured.</div>
-                <OrderId>{orderSuccess}</OrderId>
-                <Subtitle style={{ marginTop: '15px', fontSize: '0.6rem' }}>Save this ID for tracking.</Subtitle>
-              </SuccessOverlay>
-            )}
-          </AnimatePresence>
         </OrderCard>
       </Container>
     </>

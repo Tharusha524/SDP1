@@ -19,6 +19,15 @@ function Dashboard({ user, setUser }) {
             <span className="text-gray-600">
               Welcome, {user?.name} ({user?.role})
             </span>
+            {user?.role === 'customer' && (
+              <button
+                onClick={() => navigate('/customer/profile')}
+                className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold text-gray-700 hover:bg-gray-300"
+                title="View profile"
+              >
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"

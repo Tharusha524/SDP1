@@ -521,12 +521,13 @@ const OrdersView = () => {
               <th>Items</th>
               <th>Qty</th>
               <th>Total Price</th>
+              <th>Estimated Completion</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 ? (
-              <tr><td colSpan="6" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No orders found</td></tr>
+              <tr><td colSpan="7" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No orders found</td></tr>
             ) : orders.map(order => (
               <tr key={order.OrderID}>
                 <td>{order.OrderID}</td>
@@ -534,6 +535,7 @@ const OrdersView = () => {
                 <td>{order.Items || '—'}</td>
                 <td>{order.TotalQuantity ?? 0}</td>
                 <td>Rs. {Number(order.TotalPrice || 0).toLocaleString()}</td>
+                <td>{order.EstimatedCompletionDate ? new Date(order.EstimatedCompletionDate).toLocaleDateString() : '—'}</td>
                 <td><StatusChip status={order.Status}>{order.Status}</StatusChip></td>
               </tr>
             ))}
@@ -641,7 +643,7 @@ const InventoryView = () => {
 const AllocateTaskView = () => {
   const [staffList, setStaffList] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [form, setForm] = useState({ staffId: '', description: '' });
+  const [form, setForm] = useState({ staffId: '', description: '', orderId: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
 
@@ -674,13 +676,13 @@ const AllocateTaskView = () => {
     fetch(`${API_BASE}/api/admin/tasks`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ staffId: form.staffId, description: form.description.trim() })
+      body: JSON.stringify({ staffId: form.staffId, description: form.description.trim(), orderId: form.orderId || null })
     })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           setSubmitMsg(`Task ${data.taskId} assigned successfully!`);
-          setForm(prev => ({ ...prev, description: '' }));
+          setForm(prev => ({ ...prev, description: '', orderId: '' }));
           loadTasks();
         } else {
           setSubmitMsg(data.error || 'Failed to assign task');
@@ -715,6 +717,16 @@ const AllocateTaskView = () => {
             style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', outline: 'none', resize: 'none' }}
           />
         </div>
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Related Order ID (optional)</label>
+          <input
+            type="text"
+            value={form.orderId}
+            onChange={(e) => setForm(prev => ({ ...prev, orderId: e.target.value }))}
+            placeholder="e.g., OR-0001"
+            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', outline: 'none' }}
+          />
+        </div>
         {submitMsg && (
           <p style={{ marginBottom: '12px', color: submitMsg.includes('successfully') ? '#10b981' : '#ef4444', fontSize: '0.9rem' }}>{submitMsg}</p>
         )}
@@ -727,14 +739,15 @@ const AllocateTaskView = () => {
         <h3>Existing Task Allocations</h3>
         <Table>
           <thead>
-            <tr><th>Task ID</th><th>Assigned Staff</th><th>Description</th><th>Status</th></tr>
+            <tr><th>Task ID</th><th>Order ID</th><th>Assigned Staff</th><th>Description</th><th>Status</th></tr>
           </thead>
           <tbody>
             {tasks.length === 0 ? (
-              <tr><td colSpan="4" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No tasks found</td></tr>
+              <tr><td colSpan="5" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No tasks found</td></tr>
             ) : tasks.map(task => (
               <tr key={task.TaskID}>
                 <td>{task.TaskID}</td>
+                <td>{task.OrderID || '-'}</td>
                 <td style={{ fontWeight: 600, color: '#f3f4f6' }}>{task.StaffName}</td>
                 <td>{task.Description}</td>
                 <td><StatusChip status={task.Status}>{task.Status}</StatusChip></td>

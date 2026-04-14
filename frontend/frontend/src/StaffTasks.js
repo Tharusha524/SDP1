@@ -303,6 +303,7 @@ export default function StaffTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState([]);
   const [orderId, setOrderId] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pending');
   const [notification, setNotification] = useState({ show: false, msg: '', error: false });
@@ -318,6 +319,12 @@ export default function StaffTasks() {
       .then(data => { if (data.success) setTasks(data.tasks); })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Load all orders for staff/admin overview
+    fetch('http://localhost:5000/api/orders', { headers: authHeader })
+      .then(r => r.json())
+      .then(data => { if (data.success) setOrders(data.orders); })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -340,6 +347,8 @@ export default function StaffTasks() {
     } catch {}
   };
 
+  const [estimatedDate, setEstimatedDate] = useState('');
+
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderId.trim() || !orderStatus) return;
@@ -347,12 +356,13 @@ export default function StaffTasks() {
       const res = await fetch(`http://localhost:5000/api/staff/orders/${orderId.trim()}/status`, {
         method: 'PATCH',
         headers: authHeader,
-        body: JSON.stringify({ status: orderStatus })
+        body: JSON.stringify({ status: orderStatus, estimatedCompletionDate: estimatedDate || undefined })
       });
       const data = await res.json();
       if (data.success) {
         setNotification({ show: true, msg: `Order ${orderId.trim()} updated to "${orderStatus}".`, error: false });
         setOrderId('');
+        setEstimatedDate('');
       } else {
         setNotification({ show: true, msg: data.error || 'Update failed.', error: true });
       }
@@ -411,8 +421,8 @@ export default function StaffTasks() {
                 <thead>
                   <tr>
                     <th>ID</th>
+                    <th>Order ID</th>
                     <th>Requirement</th>
-                    <th>Priority</th>
                     <th>Status</th>
                     <th style={{ textAlign: 'right' }}>Action</th>
                   </tr>
@@ -426,8 +436,8 @@ export default function StaffTasks() {
                     tasks.map((task, idx) => (
                       <motion.tr key={task.TaskID} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 + idx * 0.05 }}>
                         <td><span style={{ color: '#c0a062', fontWeight: 600 }}>{task.TaskID}</span></td>
+                        <td>{task.OrderID || '-'}</td>
                         <td>{task.Description}</td>
-                        <td><PriorityBadge type={task.Priority}>{task.Priority}</PriorityBadge></td>
                         <td>
                           <StatusIndicator completed={task.Status === 'Completed'}>
                             {task.Status === 'Completed' ? <FaCheckCircle /> : <FaClock />}
@@ -484,6 +494,14 @@ export default function StaffTasks() {
                     <option value="Cancelled">Cancelled</option>
                   </Select>
                 </FormGroup>
+                  <FormGroup>
+                    <Label>Estimated Completion Date (Optional)</Label>
+                    <Input
+                      type="date"
+                      value={estimatedDate}
+                      onChange={e => setEstimatedDate(e.target.value)}
+                    />
+                  </FormGroup>
                 <SubmitButton
                   whileHover={{ backgroundColor: '#e0d6c2' }}
                   whileTap={{ scale: 0.98 }}
@@ -507,6 +525,69 @@ export default function StaffTasks() {
               </AnimatePresence>
             </GlassCard>
           </SectionGrid>
+
+          <GlassCard
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 1.0 }}
+            style={{ marginTop: '40px' }}
+          >
+            <CardTitle><FaTasks /> All Orders</CardTitle>
+            <TaskTable>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th>Order Date</th>
+                  <th>Order Details</th>
+                  <th>Item Type(s)</th>
+                  <th>Estimated Completion</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>
+                      No orders found.
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((order, idx) => (
+                    <motion.tr
+                      key={order.OrderID}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.1 + idx * 0.02 }}
+                    >
+                      <td>{order.OrderID}</td>
+                      <td>{order.CustomerName}</td>
+                      <td>
+                        <StatusIndicator completed={order.Status === 'Completed'}>
+                          {order.Status === 'Completed' ? <FaCheckCircle size={12} /> : <FaClock size={12} />}
+                          {order.Status}
+                        </StatusIndicator>
+                      </td>
+                      <td>{new Date(order.OrderDate).toLocaleString()}</td>
+                      <td style={{ maxWidth: '220px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)' }}>
+                        {order.Details || '—'}
+                      </td>
+                      <td style={{ maxWidth: '240px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)' }}>
+                        {order.Items || '—'}
+                      </td>
+                      <td>{order.EstimatedCompletionDate ? new Date(order.EstimatedCompletionDate).toLocaleDateString() : '—'}</td>
+                      <td>
+                        {typeof order.TotalPrice === 'number'
+                          ? `Rs. ${order.TotalPrice.toFixed(2)}`
+                          : order.TotalPrice}
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </TaskTable>
+          </GlassCard>
         </Main>
       </Container>
     </>

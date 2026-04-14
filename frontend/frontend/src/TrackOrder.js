@@ -320,7 +320,10 @@ const TrackOrder = () => {
           id: o.OrderID,
           status: o.Status,
           time: new Date(o.OrderDate).toLocaleString(),
-          items: o.Items
+          items: o.Items,
+          estimated: o.EstimatedCompletionDate
+            ? new Date(o.EstimatedCompletionDate).toLocaleDateString()
+            : null
         });
         setOrderId('');
       } else {
@@ -438,6 +441,7 @@ const TrackOrder = () => {
                   <th>Status</th>
                   <th>Items</th>
                   <th>Date</th>
+                  <th>Estimated Completion</th>
                 </tr>
               </thead>
               <tbody>
@@ -453,10 +457,13 @@ const TrackOrder = () => {
                       <td><StatusBadge>{trackedOrder.status}</StatusBadge></td>
                       <td style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{trackedOrder.items || '—'}</td>
                       <td style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}><FaClock size={10} style={{ marginRight: '5px' }} />{trackedOrder.time}</td>
+                      <td style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem' }}>
+                        {trackedOrder.estimated || '—'}
+                      </td>
                     </motion.tr>
                   ) : (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.15)', fontSize: '0.85rem' }}>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.15)', fontSize: '0.85rem' }}>
                         {searching ? 'Searching...' : 'Enter an Order ID to look up its status.'}
                       </td>
                     </tr>

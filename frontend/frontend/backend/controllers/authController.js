@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const db = require('../config/db');
 const LOG_PATH = path.join(__dirname, '..', 'debug_login.log');
 const SALT_ROUNDS = 10; // Standard bcrypt salt rounds for password hashing
 const JWT_SECRET = process.env.JWT_SECRET || 'marukawa-cement-secret-key-2026';
@@ -50,10 +51,23 @@ exports.login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
+    // Resolve a friendly display name (especially for customers)
+    let displayName = user.username;
+    if (user.role === 'customer') {
+      try {
+        const [rows] = await db.query('SELECT Name FROM customer WHERE CustomerID = ?', [user.id]);
+        if (rows && rows.length > 0 && rows[0].Name) {
+          displayName = rows[0].Name;
+        }
+      } catch (e) {
+        log(`Failed to load customer name for ${email}: ${e.message}`);
+      }
+    }
+
     // Generate JWT token with user payload
     const tokenPayload = {
       id: user.id,
-      username: user.username,
+      username: displayName,
       email: user.Email || user.username,
       role: user.role
     };
@@ -67,7 +81,7 @@ exports.login = async (req, res) => {
       token: token,
       user: {
         id: user.id,
-        name: user.username,
+        name: displayName,
         email: user.Email || user.username,
         role: user.role
       }
