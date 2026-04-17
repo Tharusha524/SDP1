@@ -5,6 +5,7 @@ const { generateTaskId } = require('../utils/idGenerator');
 exports.getDashboardStats = async (req, res) => {
   try {
     const [[{ totalOrders }]] = await db.query('SELECT COUNT(*) AS totalOrders FROM orders');
+    const [[{ pendingOrders }]] = await db.query("SELECT COUNT(*) AS pendingOrders FROM orders WHERE Status = 'Pending'");
     const [[{ totalRevenue }]] = await db.query('SELECT COALESCE(SUM(Quantity * Price), 0) AS totalRevenue FROM orderitem');
     const [[{ pendingTasks }]] = await db.query("SELECT COUNT(*) AS pendingTasks FROM task WHERE Status = 'Pending'");
     const [[{ activeInventory }]] = await db.query('SELECT COALESCE(SUM(AvailableQuantity), 0) AS activeInventory FROM inventory');
@@ -29,6 +30,7 @@ exports.getDashboardStats = async (req, res) => {
       success: true,
       stats: {
         totalOrders: Number(totalOrders),
+        pendingOrders: Number(pendingOrders),
         totalRevenue: Number(totalRevenue),
         pendingTasks: Number(pendingTasks),
         activeInventory: Number(activeInventory)

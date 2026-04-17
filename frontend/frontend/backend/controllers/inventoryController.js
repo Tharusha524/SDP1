@@ -36,27 +36,23 @@ exports.updateInventoryItem = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Inventory item not found' });
     }
 
-    // Check if new qty is at or below threshold -> insert Low Stock Alert notification for all admins
+    // Check if new qty is at or below threshold -> insert one shared Low Stock Alert for admin dashboards
     const [[item]] = await db.query(
       'SELECT InventoryName, MinimumThreshold FROM inventory WHERE InventoryID = ?',
       [req.params.id]
     );
     if (item && qty <= item.MinimumThreshold) {
-      const [admins] = await db.query("SELECT ID FROM users WHERE Role = 'admin'");
       const message = `Low stock alert: ${item.InventoryName} quantity (${qty}) is at or below threshold (${item.MinimumThreshold})`;
 
-      for (const admin of admins) {
-        const notifId = await generateNotificationId(db);
-        await db.query(
-          `INSERT INTO notification (NotificationID, Message, Type, ReceiverID, IsRead, RelatedID) VALUES (?, ?, 'Low Stock Alert', ?, 0, ?)`,
-          [
-            notifId,
-            message,
-            admin.ID,
-            req.params.id
-          ]
-        );
-      }
+      const notifId = await generateNotificationId(db);
+      await db.query(
+        `INSERT INTO notification (NotificationID, Message, Type, ReceiverID, IsRead, RelatedID) VALUES (?, ?, 'Low Stock Alert', NULL, 0, ?)`,
+        [
+          notifId,
+          message,
+          req.params.id
+        ]
+      );
     }
 
     res.json({ success: true, message: 'Inventory updated' });
@@ -126,8 +122,8 @@ exports.allocateInventorySummary = async (req, res) => {
       } else {
         const allocationId = await generateAllocationId();
         await db.query(
-          'INSERT INTO inventory_allocation (AllocationID, OrderID, SummaryText, AllocationType, Status, AllocatedBy) VALUES (?, ?, ?, ?, ?, ?)',
-          [allocationId, orderId, summaryText, 'Production', 'Allocated', userId]
+            'INSERT INTO inventory_allocation (AllocationID, OrderID, SummaryText, Status, AllocatedBy) VALUES (?, ?, ?, ?, ?)',
+            [allocationId, orderId, summaryText, 'Allocated', userId]
         );
       }
 
@@ -139,9 +135,13 @@ exports.allocateInventorySummary = async (req, res) => {
     }
     // Return current list of allocated inventory summaries so UI can always show all allocations
     const [rows] = await db.query(
-      `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.AllocationType, ia.Status,
-              ia.AllocatedBy, ia.UpdatedAt
+          `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.Status,
+            ia.AllocatedBy, ia.UpdatedAt,
+            o.CustomerID,
+            COALESCE(c.Name, 'Unknown') AS CustomerName
        FROM inventory_allocation ia
+           LEFT JOIN orders o ON ia.OrderID = o.OrderID
+           LEFT JOIN customer c ON o.CustomerID = c.CustomerID
        ORDER BY ia.UpdatedAt DESC`
     );
 
@@ -156,9 +156,13 @@ exports.allocateInventorySummary = async (req, res) => {
 exports.getInventoryAllocations = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.AllocationType, ia.Status,
-              ia.AllocatedBy, ia.UpdatedAt
+      `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.Status,
+              ia.AllocatedBy, ia.UpdatedAt,
+              o.CustomerID,
+              COALESCE(c.Name, 'Unknown') AS CustomerName
        FROM inventory_allocation ia
+       LEFT JOIN orders o ON ia.OrderID = o.OrderID
+       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
        ORDER BY ia.UpdatedAt DESC`
     );
     return res.json({ success: true, allocations: rows });

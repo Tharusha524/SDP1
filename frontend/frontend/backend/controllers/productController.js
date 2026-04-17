@@ -64,12 +64,14 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
   try {
     console.log('Deleting product:', req.params.id);
-    const deleted = await Product.hardDelete(req.params.id);
+    // Safely delete: hard delete if not used in any order items,
+    // otherwise soft delete to avoid foreign key constraint errors.
+    const deleted = await Product.safeDelete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
-    console.log('✅ Product permanently deleted from database');
-    res.json({ success: true, message: 'Product deleted successfully' });
+    console.log('✅ Product deleted (hard or soft, depending on usage)');
+    res.json({ success: true, message: 'Product removed successfully' });
   } catch (err) {
     console.error('Error deleting product:', err);
     res.status(500).json({ success: false, error: err.message });

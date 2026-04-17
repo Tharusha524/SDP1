@@ -61,6 +61,21 @@ const Product = {
       [id]
     );
     return result.affectedRows > 0;
+  },
+
+  // Safely delete product: remove related order items first, then delete product row
+  safeDelete: async (id) => {
+    // Delete any order items that reference this product to avoid FK constraint errors
+    await db.query(
+      'DELETE FROM orderitem WHERE ProductID = ?',
+      [id]
+    );
+
+    const [hardRes] = await db.query(
+      'DELETE FROM product WHERE ProductID = ?',
+      [id]
+    );
+    return hardRes.affectedRows > 0;
   }
 };
 

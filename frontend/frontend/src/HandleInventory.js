@@ -460,8 +460,8 @@ const HandleInventory = () => {
               <thead>
                 <tr>
                   <th>Order ID</th>
+                  <th>Customer</th>
                   <th>Summary</th>
-                  <th>Allocation Type</th>
                   <th>Status</th>
                   <th>Last Updated</th>
                 </tr>
@@ -470,8 +470,8 @@ const HandleInventory = () => {
                 {filteredAllocatedData.map(row => (
                   <tr key={row.AllocationID || row.id}>
                     <td style={{ fontWeight: 600, color: '#c0a062' }}>{row.OrderID || row.id}</td>
+                    <td>{row.CustomerName || '-'}</td>
                     <td>{row.SummaryText || row.summary || '-'}</td>
-                    <td>{row.AllocationType || '-'}</td>
                     <td>{row.Status || '-'}</td>
                     <td>{row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString() : '-'}</td>
                   </tr>

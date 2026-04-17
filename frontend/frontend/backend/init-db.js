@@ -110,7 +110,6 @@ const initDB = async () => {
         AllocationID VARCHAR(20) PRIMARY KEY,
         OrderID VARCHAR(20) NOT NULL,
         SummaryText VARCHAR(500),
-        AllocationType ENUM('Production', 'Sample', 'Waste', 'Other') DEFAULT 'Production',
         Status ENUM('Allocated', 'Reversed') DEFAULT 'Allocated',
         AllocatedBy VARCHAR(20) NOT NULL,
         CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -49,6 +49,20 @@ async function migrate() {
       console.log('InventorySummary column not found on inventory_allocation; nothing to drop.');
     }
 
+    // Drop AllocationType column if present
+    const [allocationTypeColumns] = await db.query(
+      "SHOW COLUMNS FROM inventory_allocation LIKE 'AllocationType'"
+    );
+
+    if (allocationTypeColumns.length > 0) {
+      console.log('Dropping AllocationType column from inventory_allocation...');
+      await db.query(
+        'ALTER TABLE inventory_allocation DROP COLUMN AllocationType'
+      );
+    } else {
+      console.log('AllocationType column not found on inventory_allocation; nothing to drop.');
+    }
+
     console.log('inventory_allocation migration completed successfully.');
   } catch (err) {
     console.error('Error during inventory_allocation migration:', err.message);

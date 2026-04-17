@@ -351,8 +351,9 @@ const LoginPage = () => {
         localStorage.setItem('token', data.token);
 
         // Navigate based on role
+        // Admin goes first to the product catalog view, then can move to dashboard or manage items from there
         const roleRoutes = {
-          admin: '/admin/dashboard',
+          admin: '/admin/orders',
           staff: '/staff/tasks',
           storekeeper: '/storekeeper/inventory-tracker',
           customer: '/customer/catalog',

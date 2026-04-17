@@ -410,16 +410,26 @@ const DashboardView = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/admin/stats`, { headers: getAuthHeaders() })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          setStats(data.stats);
-          setRecentOrders(data.recentOrders || []);
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const fetchStats = () => {
+      fetch(`${API_BASE}/api/admin/stats`, { headers: getAuthHeaders() })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            setStats(data.stats);
+            setRecentOrders(data.recentOrders || []);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    };
+
+    // Initial load
+    fetchStats();
+
+    // Poll every 10 seconds for near real-time updates while on dashboard
+    const intervalId = setInterval(fetchStats, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const fmtRevenue = (n) => {
@@ -448,9 +458,9 @@ const DashboardView = () => {
           <StatTrend className="negative">Awaiting completion</StatTrend>
         </StatCard>
         <StatCard initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} color="#6366f1">
-          <StatLabel>Active Inventory</StatLabel>
-          <StatValue>{loading ? '...' : Number(stats?.activeInventory || 0).toLocaleString()}</StatValue>
-          <StatTrend className="positive">Total units in stock</StatTrend>
+          <StatLabel>Pending Orders</StatLabel>
+          <StatValue>{loading ? '...' : Number(stats?.pendingOrders || 0).toLocaleString()}</StatValue>
+          <StatTrend className="negative">Awaiting processing</StatTrend>
         </StatCard>
       </StatsGrid>
 
@@ -941,6 +951,169 @@ const ReportsView = () => {
     }
   };
 
+  const downloadFullReport = () => {
+    const doc = new jsPDF();
+    const now = new Date().toLocaleString();
+
+    const addHeader = (title) => {
+      doc.setFontSize(20);
+      doc.setTextColor(192, 160, 98);
+      doc.text('Marukawa Concrete Works', 14, 18);
+      doc.setFontSize(9);
+      doc.setTextColor(130, 130, 130);
+      doc.text(`Generated: ${now}`, 14, 26);
+      doc.setDrawColor(192, 160, 98);
+      doc.setLineWidth(0.5);
+      doc.line(14, 30, 196, 30);
+
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text(title, 14, 40);
+    };
+
+    // -------- Page 1: Business Performance & Customer Behaviour --------
+    addHeader('Business Performance & Customer Insights');
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+
+    const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
+    const completionRate = orders.length ? (completedOrders / orders.length) * 100 : 0;
+
+    // Monitor business performance
+    doc.text(`Total Orders: ${orders.length}`, 14, 48);
+    doc.text(`Completed Orders: ${completedOrders} (${completionRate.toFixed(1)}% completion)`, 14, 54);
+    doc.text(`Total Revenue: Rs. ${totalRevenue.toLocaleString()}`, 14, 60);
+    doc.text(`Average Order Value: Rs. ${avgOrderValue.toFixed(2)}`, 14, 66);
+
+    // Customer behaviour: top customers and repeat vs new
+    const customerMap = new Map();
+    orders.forEach(o => {
+      const name = o.CustomerName || 'Unknown';
+      const prev = customerMap.get(name) || { count: 0, revenue: 0 };
+      customerMap.set(name, {
+        count: prev.count + 1,
+        revenue: prev.revenue + Number(o.TotalPrice || 0)
+      });
+    });
+
+    const customerStats = Array.from(customerMap.entries());
+    const repeatCustomers = customerStats.filter(c => c[1].count > 1).length;
+    const newCustomers = customerStats.filter(c => c[1].count === 1).length;
+    const topCustomers = customerStats
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 5)
+      .map(([name, v]) => `${name} (${v.count} orders, Rs. ${v.revenue.toLocaleString()})`);
+
+    doc.text(`New Customers: ${newCustomers}`, 120, 48);
+    doc.text(`Repeat Customers: ${repeatCustomers}`, 120, 54);
+    doc.text('Top Customers:', 120, 60);
+    topCustomers.forEach((line, idx) => {
+      doc.text(`- ${line}`, 120, 66 + idx * 6);
+    });
+
+    // Product popularity (what products are ordered many times)
+    const productMap = new Map();
+    orders.forEach(o => {
+      if (!o.Items) return;
+      String(o.Items).split(',').forEach(raw => {
+        const part = raw.trim();
+        if (!part) return;
+        const match = part.match(/(.+)\sx(\d+)/);
+        const name = (match ? match[1] : part).trim();
+        const qty = match ? parseInt(match[2], 10) || 1 : 1;
+        const prev = productMap.get(name) || { orders: 0, quantity: 0 };
+        productMap.set(name, {
+          orders: prev.orders + 1,
+          quantity: prev.quantity + qty
+        });
+      });
+    });
+
+    const topProducts = Array.from(productMap.entries())
+      .sort((a, b) => b[1].quantity - a[1].quantity)
+      .slice(0, 5);
+
+    let productsStartY = 66 + topCustomers.length * 6 + 8;
+    if (productsStartY < 80) productsStartY = 80;
+
+    doc.text('Most Ordered Products (by qty):', 14, productsStartY);
+    topProducts.forEach(([name, info], idx) => {
+      doc.text(`- ${name}: ${info.quantity} units in ${info.orders} orders`, 14, productsStartY + 6 + idx * 6);
+    });
+
+    // -------- Page 2: Orders Detail (decision support for promotions, pricing, restocking) --------
+    doc.addPage();
+    addHeader('Orders Detail (Sales Performance)');
+    autoTable(doc, {
+      startY: 46,
+      head: [['Order ID', 'Customer', 'Date', 'Status', 'Total (Rs.)']],
+      body: orders.map(o => [
+        o.OrderID,
+        o.CustomerName,
+        o.OrderDate ? new Date(o.OrderDate).toLocaleDateString() : 'N/A',
+        o.Status,
+        Number(o.TotalPrice).toLocaleString()
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 245, 240] },
+    });
+
+    // -------- Page 3: Inventory & Restocking Decisions --------
+    doc.addPage();
+    addHeader('Inventory & Restocking Insights');
+
+    const lowStockItems = inventory.filter(i => i.AvailableQuantity <= i.MinimumThreshold);
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Total Inventory Items: ${inventory.length}`, 14, 48);
+    doc.text(`Low Stock Items (need restock): ${lowStockItems.length}`, 14, 54);
+
+    autoTable(doc, {
+      startY: 60,
+      head: [['ID', 'Inventory Name', 'Qty Available', 'Min Threshold', 'Status', 'Last Updated']],
+      body: inventory.map(i => [
+        i.InventoryID,
+        i.InventoryName,
+        i.AvailableQuantity,
+        i.MinimumThreshold,
+        i.AvailableQuantity <= i.MinimumThreshold ? 'LOW STOCK' : 'OK',
+        i.LastUpdated ? new Date(i.LastUpdated).toLocaleDateString() : 'N/A'
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 245, 240] },
+    });
+
+    // -------- Page 4: Staff Tasks & Operational Load --------
+    doc.addPage();
+    addHeader('Staff Tasks & Operational Load');
+
+    const pendingTasksCount = tasks.filter(t => t.Status === 'Pending').length;
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Total Tasks: ${tasks.length}`, 14, 48);
+    doc.text(`Pending Tasks: ${pendingTasksCount}`, 14, 54);
+
+    autoTable(doc, {
+      startY: 60,
+      head: [['Task ID', 'Staff', 'Description', 'Priority', 'Status', 'Assigned']],
+      body: tasks.map(t => [
+        t.TaskID,
+        t.StaffName,
+        t.Description,
+        t.Priority,
+        t.Status,
+        t.AssignedDate ? new Date(t.AssignedDate).toLocaleDateString() : 'N/A'
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 245, 240] },
+    });
+
+    doc.save('marukawa-full-report.pdf');
+  };
+
   if (loading) return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading report data...</p>
@@ -968,37 +1141,38 @@ const ReportsView = () => {
   ];
 
   const reportCards = [
-    { type: 'orders', title: 'Orders Report', desc: `${orders.length} total orders — ${completedOrders} completed`, file: 'orders-report.pdf' },
-    { type: 'inventory', title: 'Inventory Report', desc: `${inventory.length} items — ${lowStockCount} below threshold`, file: 'inventory-report.pdf' },
-    { type: 'tasks', title: 'Staff Tasks Report', desc: `${tasks.length} total tasks — ${pendingTasks} pending`, file: 'tasks-report.pdf' },
+    // Individual report cards removed; using a single full PDF now
   ];
 
   return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <h3 style={{ marginBottom: '30px', fontSize: '1.5rem' }}>Report Generation</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <h3 style={{ fontSize: '1.5rem', margin: 0 }}>Report Generation</h3>
+        <button
+          onClick={downloadFullReport}
+          style={{
+            background: '#c0a062',
+            color: '#111827',
+            border: 'none',
+            padding: '10px 22px',
+            borderRadius: '999px',
+            fontWeight: 700,
+            fontSize: '0.78rem',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Download Full PDF
+        </button>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '40px' }}>
         {summaryStats.map(s => (
           <div key={s.label} style={{ background: 'rgba(192,160,98,0.08)', border: '1px solid rgba(192,160,98,0.2)', borderRadius: '12px', padding: '16px' }}>
             <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px' }}>{s.label}</div>
             <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#c0a062' }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {reportCards.map(r => (
-          <div key={r.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
-            <div>
-              <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '4px' }}>{r.title}</div>
-              <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>{r.desc}</div>
-            </div>
-            <button
-              onClick={() => downloadPDF(r.type)}
-              style={{ background: '#c0a062', color: '#111827', border: 'none', padding: '10px 22px', borderRadius: '8px', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-            >
-              Download PDF
-            </button>
           </div>
         ))}
       </div>
@@ -1115,7 +1289,23 @@ export default function AdminDashboard() {
             </div>
 
             <div style={{ display: 'flex', gap: '16px' }}>
-              {/* Header Actions like Notifications could go here */}
+              <button
+                onClick={() => navigate('/admin/orders')}
+                style={{
+                  background: '#c0a062',
+                  color: '#111827',
+                  border: 'none',
+                  padding: '10px 18px',
+                  borderRadius: '999px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  cursor: 'pointer'
+                }}
+              >
+                ← Back to Catalog
+              </button>
             </div>
           </TopBar>
 

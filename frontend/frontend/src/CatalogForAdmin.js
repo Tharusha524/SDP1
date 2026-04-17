@@ -350,17 +350,102 @@ const CatalogForAdmin = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [products, setProducts] = useState(PRODUCTS_DATA);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to remove this product from the catalog?")) {
-      setProducts(prev => prev.filter(p => p.id !== id));
+  // Only allow admins here and load real products from backend
+  React.useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (!storedUser) {
+      navigate('/login');
+      return;
+    }
+
+    let parsedUser;
+    try {
+      parsedUser = JSON.parse(storedUser);
+    } catch {
+      navigate('/login');
+      return;
+    }
+
+    if (!parsedUser || parsedUser.role !== 'admin') {
+      navigate('/catalog');
+      return;
+    }
+
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('http://localhost:5000/api/products');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.products)) {
+          setProducts(data.products);
+        } else {
+          setProducts([]);
+        }
+      } catch (err) {
+        console.error('Error loading products for admin catalog:', err);
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [navigate]);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this product from the catalog?")) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`http://localhost:5000/api/products/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.filter(p => p.ProductID !== id));
+        alert('✅ Product removed from catalog');
+      } else {
+        alert(data.error || 'Failed to delete product');
+      }
+    } catch (err) {
+      console.error('Error deleting product:', err);
+      alert('Error deleting product. Please try again.');
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getProductImage = (product) => {
+    if (product.Image) {
+      if (typeof product.Image === 'string' && (product.Image.startsWith('data:') || product.Image.startsWith('http'))) {
+        return product.Image;
+      }
+
+      const map = {
+        'Gemini_Generated_Image_elt1ngelt1ngelt1.png': img5,
+        'Gemini_Generated_Image_qoa691qoa691qoa6.png': img7,
+        'login-hero.png': img3,
+        'register-hero.png': img8,
+        'WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg': img1,
+        'WhatsApp Image 2026-01-20 at 09.06.34.jpeg': img2,
+      };
+      return map[product.Image] || img1;
+    }
+    return img1;
+  };
+
+  const filteredProducts = products.filter(p => {
+    const name = (p.Name || '').toLowerCase();
+    const desc = (p.Description || '').toLowerCase();
+    const q = searchTerm.toLowerCase();
+    return name.includes(q) || desc.includes(q);
+  });
 
   return (
     <>
@@ -405,33 +490,39 @@ const CatalogForAdmin = () => {
 
           <CatalogGrid>
             <AnimatePresence>
-              {filteredProducts.map((product, idx) => (
-                <ProductCard
-                  key={product.id || idx}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: idx * 0.1 }}
-                  layout
-                >
-                  <ProductImg src={product.img} />
-                  <ProductInfo>
-                    <ProductHeader>
-                      <ProductTitle>{product.title}</ProductTitle>
-                      <ProductPrice>{product.price}</ProductPrice>
-                    </ProductHeader>
-                    <ProductDesc>{product.desc}</ProductDesc>
-                    <ButtonGroup>
-                      <ActionButton onClick={() => navigate('/admin/catalog-manage')} style={{ flex: 1 }}>
-                        Edit <FaEdit />
-                      </ActionButton>
-                      <DeleteButton onClick={() => handleDelete(product.id)} title="Delete Product">
-                        <FaTrash />
-                      </DeleteButton>
-                    </ButtonGroup>
-                  </ProductInfo>
-                </ProductCard>
-              ))}
+              {loading && filteredProducts.length === 0 ? (
+                <p style={{ color: 'rgba(255,255,255,0.7)' }}>Loading catalog...</p>
+              ) : filteredProducts.length === 0 ? (
+                <p style={{ color: 'rgba(255,255,255,0.7)' }}>No products in catalog yet.</p>
+              ) : (
+                filteredProducts.map((product, idx) => (
+                  <ProductCard
+                    key={product.ProductID || idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ delay: idx * 0.1 }}
+                    layout
+                  >
+                    <ProductImg src={getProductImage(product)} />
+                    <ProductInfo>
+                      <ProductHeader>
+                        <ProductTitle>{product.Name}</ProductTitle>
+                        <ProductPrice>Rs. {parseFloat(product.Price).toFixed(2)}</ProductPrice>
+                      </ProductHeader>
+                      <ProductDesc>{product.Description || 'No description'}</ProductDesc>
+                      <ButtonGroup>
+                        <ActionButton onClick={() => navigate('/admin/catalog-manage')} style={{ flex: 1 }}>
+                          Edit / Add <FaEdit />
+                        </ActionButton>
+                        <DeleteButton onClick={() => handleDelete(product.ProductID)} title="Delete Product">
+                          <FaTrash />
+                        </DeleteButton>
+                      </ButtonGroup>
+                    </ProductInfo>
+                  </ProductCard>
+                ))
+              )}
             </AnimatePresence>
           </CatalogGrid>
         </MainContent>
