@@ -60,10 +60,12 @@ const initDB = async () => {
       CREATE TABLE IF NOT EXISTS orders (
         OrderID VARCHAR(20) PRIMARY KEY,
         CustomerID VARCHAR(20) NOT NULL,
-        TotalPrice DECIMAL(10, 2) NOT NULL,
+        TotalPrice DECIMAL(10, 2) DEFAULT 0,
         Status ENUM('Pending', 'In Progress', 'Completed', 'Cancelled') DEFAULT 'Pending',
         Address VARCHAR(255),
         SpecialInstructions TEXT,
+        Details TEXT,
+        EstimatedCompletionDate DATE,
         CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (CustomerID) REFERENCES customer(CustomerID)
@@ -85,6 +87,21 @@ const initDB = async () => {
       )
     `);
         console.log('Order Items table ready.');
+
+        // Create payment table
+        await connection.query(`
+      CREATE TABLE IF NOT EXISTS payment (
+        PaymentID VARCHAR(20) PRIMARY KEY,
+        OrderID VARCHAR(20) NOT NULL,
+        Amount DECIMAL(10, 2) NOT NULL,
+        Method VARCHAR(50) NOT NULL,
+        Status ENUM('Pending', 'Paid', 'Failed', 'Refunded') DEFAULT 'Pending',
+        CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (OrderID) REFERENCES orders(OrderID)
+      )
+    `);
+        console.log('Payment table ready.');
 
         // Create task table (without priority column)
         await connection.query(`
