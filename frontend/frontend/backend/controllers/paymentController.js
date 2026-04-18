@@ -256,20 +256,13 @@ exports.payhereReturn = async (req, res) => {
 exports.cardDirectPayment = async (req, res) => {
   try {
     const user = req.user;
-
     if (!user || user.role !== 'customer') {
-      return res
-        .status(403)
-        .json({ success: false, error: 'Only customers can place orders' });
+      return res.status(403).json({ success: false, error: 'Only customers can place orders' });
     }
 
     const { productId, quantity, details } = req.body;
-
     if (!productId || !quantity || quantity <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Product and positive quantity are required'
-      });
+      return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
     }
 
     const [products] = await db.query(
@@ -278,13 +271,10 @@ exports.cardDirectPayment = async (req, res) => {
     );
 
     if (products.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, error: 'Product not found or inactive' });
+      return res.status(404).json({ success: false, error: 'Product not found or inactive' });
     }
 
     const product = products[0];
-
     const totalPrice = Number(product.Price) * quantity;
     const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
 
@@ -316,9 +306,7 @@ exports.cardDirectPayment = async (req, res) => {
       estimatedCompletionDate
     });
   } catch (err) {
-    console.error('Error creating direct card payment:', err);
-    return res
-      .status(500)
-      .json({ success: false, error: 'Failed to complete payment' });
+    console.error('Payment error:', err.message);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to complete payment' });
   }
 };
