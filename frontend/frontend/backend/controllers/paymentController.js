@@ -2,6 +2,8 @@ const db = require('../config/db');
 const crypto = require('crypto');
 const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../utils/idGenerator');
 
+const MAX_ORDER_QUANTITY = 50;
+
 const getEstimatedCompletionDate = (baseDays = 7) => {
   const now = new Date();
   now.setDate(now.getDate() + baseDays);
@@ -31,7 +33,7 @@ exports.payhereInit = async (req, res) => {
     }
 
     const [products] = await db.query(
-      'SELECT ProductID, Name, Price FROM product WHERE ProductID = ? AND IsActive = 1',
+      'SELECT ProductID, Name, Price FROM product WHERE ProductID = ?',
       [productId]
     );
 
@@ -195,7 +197,7 @@ exports.payhereReturn = async (req, res) => {
       return res.redirect(`${frontendBase}/payment-failed`);
     }
 
-    const { orderId, productId, quantity, details, customerId } = decoded;
+    const { orderId, productId, quantity } = decoded;
 
     // PayHere success status is typically "2" in sandbox.
     // If status is provided and is not "2", treat as failure.
@@ -206,7 +208,7 @@ exports.payhereReturn = async (req, res) => {
 
     // Re-validate product and compute amounts
     const [products] = await db.query(
-      'SELECT ProductID, Price FROM product WHERE ProductID = ? AND IsActive = 1',
+      'SELECT ProductID, Price FROM product WHERE ProductID = ?',
       [productId]
     );
 
@@ -265,13 +267,21 @@ exports.cardDirectPayment = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
     }
 
+    if (quantity > MAX_ORDER_QUANTITY) {
+      return res.status(400).json({
+        success: false,
+        error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per order`
+      });
+    }
+
+    // Check product exists and is active
     const [products] = await db.query(
-      'SELECT ProductID, Name, Price FROM product WHERE ProductID = ? AND IsActive = 1',
+      'SELECT `ProductID`, `Name`, `Price` FROM `product` WHERE `ProductID` = ?',
       [productId]
     );
 
-    if (products.length === 0) {
-      return res.status(404).json({ success: false, error: 'Product not found or inactive' });
+    if (!products || products.length === 0) {
+      return res.status(404).json({ success: false, error: 'Product with ID ' + productId + ' not found or inactive' });
     }
 
     const product = products[0];
@@ -283,18 +293,21 @@ exports.cardDirectPayment = async (req, res) => {
     const paymentId = await generatePaymentId(db);
     const estimatedCompletionDate = getEstimatedCompletionDate(7);
 
+    // Create order
     await db.query(
-      'INSERT INTO orders (OrderID, CustomerID, Status, Details, EstimatedCompletionDate) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO `orders` (`OrderID`, `CustomerID`, `Status`, `Details`, `EstimatedCompletionDate`) VALUES (?, ?, ?, ?, ?)',
       [orderId, user.id, 'Pending', details || '', estimatedCompletionDate]
     );
 
+    // Create order item
     await db.query(
-      'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, Price) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO `orderitem` (`OrderItemID`, `OrderID`, `ProductID`, `Quantity`, `Price`) VALUES (?, ?, ?, ?, ?)',
       [orderItemId, orderId, product.ProductID, quantity, product.Price]
     );
 
+    // Record payment
     await db.query(
-      'INSERT INTO payment (PaymentID, OrderID, Amount, Method, Status) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO `payment` (`PaymentID`, `OrderID`, `Amount`, `Method`, `Status`) VALUES (?, ?, ?, ?, ?)',
       [paymentId, orderId, advanceAmount, 'Card (Demo)', 'Paid']
     );
 
@@ -306,7 +319,7 @@ exports.cardDirectPayment = async (req, res) => {
       estimatedCompletionDate
     });
   } catch (err) {
-    console.error('Payment error:', err.message);
+    console.error('Payment error:', err.message, err.sql);
     return res.status(500).json({ success: false, error: err.message || 'Failed to complete payment' });
   }
 };

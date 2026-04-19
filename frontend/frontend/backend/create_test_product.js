@@ -9,9 +9,9 @@ const { generateProductId } = require('./utils/idGenerator');
     console.log('Creating test product with ID:', productId);
     
     await connection.query(
-      `INSERT INTO product (ProductID, Name, Description, Price, IsActive) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [productId, 'Test Cement Bag', 'High quality cement for testing', 5000.00, 1]
+      `INSERT INTO product (ProductID, Name, Description, Price) 
+       VALUES (?, ?, ?, ?)`,
+      [productId, 'Test Cement Bag', 'High quality cement for testing', 5000.00]
     );
     
     console.log('Product created successfully');

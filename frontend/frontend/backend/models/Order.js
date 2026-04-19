@@ -31,7 +31,7 @@ const Order = {
       SELECT 
         o.OrderID,
         o.CustomerID,
-        o.OrderDate,
+        o.CreatedAt AS OrderDate,
         o.Status,
         o.Address,
         SUM(oi.Quantity * oi.Price) as TotalPrice,
@@ -41,7 +41,7 @@ const Order = {
       LEFT JOIN product p ON oi.ProductID = p.ProductID
       WHERE o.CustomerID = ?
       GROUP BY o.OrderID
-      ORDER BY o.OrderDate DESC
+      ORDER BY o.CreatedAt DESC
     `, [customerId]);
     return rows;
   },
@@ -55,7 +55,7 @@ const Order = {
         c.Name as CustomerName,
         c.Email as CustomerEmail,
         c.ContactNo as CustomerContact,
-        o.OrderDate,
+        o.CreatedAt AS OrderDate,
         o.Status,
         o.Address,
         SUM(oi.Quantity * oi.Price) as TotalPrice,
@@ -66,7 +66,7 @@ const Order = {
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
       LEFT JOIN product p ON oi.ProductID = p.ProductID
       GROUP BY o.OrderID
-      ORDER BY o.OrderDate DESC
+      ORDER BY o.CreatedAt DESC
     `);
     return rows;
   },
@@ -79,7 +79,7 @@ const Order = {
         o.CustomerID,
         c.Name as CustomerName,
         c.Email as CustomerEmail,
-        o.OrderDate,
+        o.CreatedAt AS OrderDate,
         o.Status,
         o.Address,
         o.SpecialInstructions,

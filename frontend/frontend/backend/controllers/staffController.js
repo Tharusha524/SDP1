@@ -31,6 +31,18 @@ exports.completeTask = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, error: 'Task not found or not assigned to you' });
     }
+
+    const [[{ openTasks }]] = await db.query(
+      "SELECT COUNT(*) AS openTasks FROM task WHERE StaffID = ? AND Status IN ('Pending', 'In Progress')",
+      [staffId]
+    );
+
+    const nextStatus = Number(openTasks) > 0 ? 'Busy' : 'Available';
+    await db.query(
+      "UPDATE staff SET Status = ?, UpdatedAt = NOW() WHERE StaffID = ?",
+      [nextStatus, staffId]
+    );
+
     res.json({ success: true, message: 'Task marked as completed' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

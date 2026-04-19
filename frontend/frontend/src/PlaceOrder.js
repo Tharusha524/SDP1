@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
+import { motion } from 'framer-motion';
+import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaArrowLeft } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
+
+const MAX_ORDER_QUANTITY = 50;
 
 // --- Global Aesthetics ---
 const GlobalStyle = createGlobalStyle`
@@ -118,28 +120,6 @@ const Input = styled.input`
   }
 `;
 
-const Select = styled.select`
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 15px;
-  color: #fff;
-  border-radius: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #c0a062;
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  option {
-    background: #1a1a1a;
-    color: #fff;
-  }
-`;
-
 const PriceBox = styled.div`
   background: rgba(192, 160, 98, 0.08);
   padding: 25px;
@@ -189,24 +169,6 @@ const SubmitButton = styled(motion.button)`
   }
 `;
 
-const SuccessOverlay = styled(motion.div)`
-  margin-top: 30px;
-  padding: 30px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  border-radius: 16px;
-  text-align: center;
-  color: #10b981;
-`;
-
-const OrderId = styled.div`
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-top: 10px;
-  letter-spacing: 2px;
-  color: #fff;
-`;
-
 const PlaceOrder = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -219,7 +181,6 @@ const PlaceOrder = () => {
     quantity: 1
   });
   const [totalPrice, setTotalPrice] = useState(0);
-  const [orderSuccess, setOrderSuccess] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -289,6 +250,10 @@ const PlaceOrder = () => {
     setError(null);
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
+    if (formData.quantity > MAX_ORDER_QUANTITY) {
+      setError(`Quantity cannot exceed ${MAX_ORDER_QUANTITY}.`);
+      return;
+    }
     if (totalPrice <= 0 || !formData.product) {
       setError('Please select a product and valid quantity before paying the advance.');
       return;
@@ -383,10 +348,14 @@ const PlaceOrder = () => {
                 id="quantity"
                 placeholder="Enter quantity"
                 min="1"
+                max={MAX_ORDER_QUANTITY}
                 value={formData.quantity}
                 onChange={handleInputChange}
                 required
               />
+              <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)' }}>
+                Maximum quantity per order: {MAX_ORDER_QUANTITY}
+              </div>
             </FormGroup>
 
             <PriceBox>

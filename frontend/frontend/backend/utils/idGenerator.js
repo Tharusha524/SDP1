@@ -22,16 +22,22 @@ const generateId = (prefix, existingIds = [], padding = 4) => {
   return `${prefix}-${formattedNumber}`;
 };
 
-const generateOrderId = async (db) => {
+const generateSequentialId = async (db, table, column, prefix, padding = 4) => {
   try {
-    const [rows] = await db.query('SELECT OrderID FROM orders ORDER BY OrderID DESC LIMIT 100');
-    const existingIds = rows.map(row => row.OrderID);
-    return generateId('ORD', existingIds);
+    const [rows] = await db.query(
+      `SELECT ${column} AS id FROM ${table} WHERE ${column} REGEXP ?`,
+      [`^${prefix}-[0-9]{${padding}}$`]
+    );
+    const existingIds = rows.map(row => row.id);
+    return generateId(prefix, existingIds, padding);
   } catch (error) {
-    // Fallback to random if query fails
     const randomNum = Math.floor(Math.random() * 9000) + 1000;
-    return `ORD-${randomNum}`;
+    return `${prefix}-${randomNum}`;
   }
+};
+
+const generateOrderId = async (db) => {
+  return generateSequentialId(db, 'orders', 'OrderID', 'ORD', 4);
 };
 
 const generateProductId = async (db) => {
@@ -145,14 +151,7 @@ const generateNotificationId = async (db) => {
 };
 
 const generatePaymentId = async (db) => {
-  try {
-    const [rows] = await db.query('SELECT PaymentID FROM payment ORDER BY PaymentID DESC LIMIT 100');
-    const existingIds = rows.map(row => row.PaymentID);
-    return generateId('PAY', existingIds);
-  } catch (error) {
-    const randomNum = Math.floor(Math.random() * 9000) + 1000;
-    return `PAY-${randomNum}`;
-  }
+  return generateSequentialId(db, 'payment', 'PaymentID', 'PAY', 4);
 };
 
 module.exports = {

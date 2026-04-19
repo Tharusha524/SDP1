@@ -16,7 +16,7 @@ exports.getAllOrders = async (req, res) => {
     const [orders] = await db.query(`
             SELECT o.OrderID,
               COALESCE(c.Name, o.CustomerID) AS CustomerName,
-              o.OrderDate,
+              o.CreatedAt AS OrderDate,
               o.Status,
               o.Details,
               o.EstimatedCompletionDate,
@@ -27,8 +27,8 @@ exports.getAllOrders = async (req, res) => {
       LEFT JOIN customer c  ON o.CustomerID  = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID    = oi.OrderID
       LEFT JOIN product p   ON oi.ProductID  = p.ProductID
-      GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status, o.Details, o.EstimatedCompletionDate
-      ORDER BY o.OrderDate DESC
+      GROUP BY o.OrderID, c.Name, o.CustomerID, o.CreatedAt, o.Status, o.Details, o.EstimatedCompletionDate
+      ORDER BY o.CreatedAt DESC
     `);
     res.json({ success: true, orders });
   } catch (err) {
@@ -47,7 +47,7 @@ exports.getMyOrders = async (req, res) => {
     const [orders] = await db.query(
             `SELECT o.OrderID,
               COALESCE(c.Name, o.CustomerID) AS CustomerName,
-              o.OrderDate,
+              o.CreatedAt AS OrderDate,
               o.Status,
               o.EstimatedCompletionDate,
               COALESCE(SUM(oi.Quantity * oi.Price), 0)   AS TotalPrice,
@@ -58,8 +58,8 @@ exports.getMyOrders = async (req, res) => {
        LEFT JOIN orderitem oi ON o.OrderID    = oi.OrderID
        LEFT JOIN product p   ON oi.ProductID  = p.ProductID
        WHERE o.CustomerID = ?
-      GROUP BY o.OrderID, c.Name, o.CustomerID, o.OrderDate, o.Status, o.EstimatedCompletionDate
-       ORDER BY o.OrderDate DESC`,
+      GROUP BY o.OrderID, c.Name, o.CustomerID, o.CreatedAt, o.Status, o.EstimatedCompletionDate
+       ORDER BY o.CreatedAt DESC`,
       [user.id]
     );
 
@@ -84,7 +84,7 @@ exports.getOrderById = async (req, res) => {
             `SELECT o.OrderID,
               o.CustomerID,
               COALESCE(c.Name, o.CustomerID) AS CustomerName,
-              o.OrderDate,
+              o.CreatedAt AS OrderDate,
               o.Status,
               o.Details,
               o.EstimatedCompletionDate,
@@ -98,7 +98,7 @@ exports.getOrderById = async (req, res) => {
        LEFT JOIN product p    ON oi.ProductID  = p.ProductID
        LEFT JOIN payment pay  ON pay.OrderID   = o.OrderID
        WHERE o.OrderID = ? AND o.CustomerID = ?
-      GROUP BY o.OrderID, o.CustomerID, c.Name, o.OrderDate, o.Status, o.Details, o.EstimatedCompletionDate`,
+      GROUP BY o.OrderID, o.CustomerID, c.Name, o.CreatedAt, o.Status, o.Details, o.EstimatedCompletionDate`,
       [orderId, user.id]
     );
 
@@ -127,10 +127,19 @@ exports.createOrder = async (req, res) => {
     if (!productId || !quantity || quantity <= 0) {
       return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
     }
+        
+      const MAX_ORDER_QUANTITY = 50;
+        
+      if (quantity > MAX_ORDER_QUANTITY) {
+        return res.status(400).json({
+          success: false,
+          error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per order`
+        });
+      }
 
     // Get current product price snapshot
     const [products] = await db.query(
-      'SELECT ProductID, Price FROM product WHERE ProductID = ? AND IsActive = 1',
+      'SELECT ProductID, Price FROM product WHERE ProductID = ?',
       [productId]
     );
 

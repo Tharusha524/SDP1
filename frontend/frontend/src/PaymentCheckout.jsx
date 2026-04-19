@@ -398,9 +398,7 @@ function PaymentCheckout() {
       }
 
       navigate(`/payment-success?orderId=${encodeURIComponent(orderId)}`, {
-        state: {
-          estimatedCompletionDate: data.estimatedCompletionDate || null,
-        },
+        state: {},
       });
     } catch (e) {
       console.error("Error completing payment:", e);

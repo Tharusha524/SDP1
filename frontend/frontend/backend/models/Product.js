@@ -8,15 +8,15 @@ const Product = {
     const productId = await generateProductId(db);
     
     const [result] = await db.query(
-      'INSERT INTO product (ProductID, Name, Description, Price, Image, IsActive) VALUES (?, ?, ?, ?, ?, ?)',
-      [productId, name, description, price, image || null, 1]
+      'INSERT INTO product (ProductID, Name, Description, Price, Image) VALUES (?, ?, ?, ?, ?)',
+      [productId, name, description, price, image || null]
     );
     return productId;
   },
 
   // Get all products
   findAll: async () => {
-    const [rows] = await db.query('SELECT * FROM product WHERE IsActive = 1 ORDER BY CreatedAt DESC');
+    const [rows] = await db.query('SELECT * FROM product ORDER BY CreatedAt DESC');
     return rows;
   },
 
@@ -47,10 +47,7 @@ const Product = {
 
   // Soft delete (if needed - keeps data but marks inactive)
   softDelete: async (id) => {
-    const [result] = await db.query(
-      'UPDATE product SET IsActive = 0 WHERE ProductID = ?',
-      [id]
-    );
+    const [result] = await db.query('DELETE FROM product WHERE ProductID = ?', [id]);
     return result.affectedRows > 0;
   },
 

@@ -855,6 +855,7 @@ const StockAlertsView = () => {
 const ReportsView = () => {
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [allocations, setAllocations] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -864,14 +865,96 @@ const ReportsView = () => {
     Promise.all([
       fetch(`${API_BASE}/api/admin/reports/orders`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/inventory`, { headers }).then(r => r.json()),
+      fetch(`${API_BASE}/api/inventory/allocations`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/admin/tasks`, { headers }).then(r => r.json()),
-    ]).then(([ord, inv, tsk]) => {
+    ]).then(([ord, inv, alloc, tsk]) => {
       if (ord.success) setOrders(ord.orders);
       if (inv.success) setInventory(inv.inventory);
+      if (alloc.success) setAllocations(alloc.allocations);
       if (tsk.success) setTasks(tsk.tasks);
     }).catch(() => setError('Failed to load report data.'))
       .finally(() => setLoading(false));
   }, []);
+
+  const drawBarChart = (doc, {
+    title,
+    labels,
+    values,
+    x,
+    y,
+    width = 180,
+    barHeight = 7,
+    gap = 5,
+    color = [192, 160, 98]
+  }) => {
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    doc.text(title, x, y);
+
+    if (!labels.length || !values.length) {
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text('No data available', x, y + 8);
+      return y + 18;
+    }
+
+    const maxValue = Math.max(...values, 1);
+    let barY = y + 6;
+
+    labels.forEach((label, idx) => {
+      const value = Number(values[idx] || 0);
+      const barWidth = (value / maxValue) * (width - 70);
+
+      doc.setFontSize(9);
+      doc.setTextColor(70, 70, 70);
+      doc.text(String(label).slice(0, 24), x, barY + 5);
+
+      doc.setFillColor(235, 235, 235);
+      doc.rect(x + 48, barY, width - 70, barHeight, 'F');
+
+      doc.setFillColor(color[0], color[1], color[2]);
+      doc.rect(x + 48, barY, barWidth, barHeight, 'F');
+
+      doc.setTextColor(50, 50, 50);
+      doc.text(value.toLocaleString(), x + width - 18, barY + 5, { align: 'right' });
+
+      barY += barHeight + gap;
+    });
+
+    return barY + 2;
+  };
+
+  const parseOrderItems = (itemsText) => {
+    const map = new Map();
+    if (!itemsText) return map;
+
+    String(itemsText).split(',').forEach(raw => {
+      const part = raw.trim();
+      if (!part) return;
+
+      const match = part.match(/(.+)\sx(\d+)/i);
+      const name = (match ? match[1] : part).trim();
+      const qty = match ? parseInt(match[2], 10) || 1 : 1;
+
+      map.set(name, (map.get(name) || 0) + qty);
+    });
+
+    return map;
+  };
+
+  const parseConsumption = (summaryText) => {
+    const text = String(summaryText || '').toLowerCase();
+    const pick = (pattern) => {
+      const m = text.match(pattern);
+      return m ? parseFloat(m[1]) || 0 : 0;
+    };
+
+    return {
+      cement: pick(/cement\s+([\d.]+)/i),
+      sand: pick(/sand\s+([\d.]+)/i),
+      stonePowder: pick(/stone\s+powder\s+([\d.]+)/i),
+    };
+  };
 
   const downloadPDF = (type) => {
     const doc = new jsPDF();
@@ -950,6 +1033,7 @@ const ReportsView = () => {
       doc.save('staff-tasks-report.pdf');
     }
   };
+  void downloadPDF;
 
   const downloadFullReport = () => {
     const doc = new jsPDF();
@@ -1111,6 +1195,124 @@ const ReportsView = () => {
       alternateRowStyles: { fillColor: [248, 245, 240] },
     });
 
+    // -------- Page 5: Charts (Customer / Order / Product Performance) --------
+    doc.addPage();
+    addHeader('Performance Charts (Customer, Order, Product)');
+
+    const customerRevenueMap = new Map();
+    const orderStatusMap = new Map();
+    const productQtyMap = new Map();
+
+    orders.forEach(o => {
+      const customer = o.CustomerName || 'Unknown';
+      customerRevenueMap.set(customer, (customerRevenueMap.get(customer) || 0) + Number(o.TotalPrice || 0));
+
+      const status = o.Status || 'Unknown';
+      orderStatusMap.set(status, (orderStatusMap.get(status) || 0) + 1);
+
+      const parsed = parseOrderItems(o.Items);
+      parsed.forEach((qty, productName) => {
+        productQtyMap.set(productName, (productQtyMap.get(productName) || 0) + qty);
+      });
+    });
+
+    const chartTopCustomers = Array.from(customerRevenueMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    const statusCounts = ['Pending', 'In Progress', 'Completed', 'Cancelled'].map(s => [s, orderStatusMap.get(s) || 0]);
+
+    const chartTopProducts = Array.from(productQtyMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    let chartY = 48;
+    chartY = drawBarChart(doc, {
+      title: 'Top Customers by Revenue (Rs.)',
+      labels: chartTopCustomers.map(x => x[0]),
+      values: chartTopCustomers.map(x => Math.round(x[1])),
+      x: 14,
+      y: chartY,
+      width: 182,
+      color: [64, 132, 188]
+    });
+
+    chartY = drawBarChart(doc, {
+      title: 'Order Status Distribution (Count)',
+      labels: statusCounts.map(x => x[0]),
+      values: statusCounts.map(x => x[1]),
+      x: 14,
+      y: chartY + 2,
+      width: 182,
+      color: [120, 166, 86]
+    });
+
+    drawBarChart(doc, {
+      title: 'Top Products by Quantity Ordered',
+      labels: chartTopProducts.map(x => x[0]),
+      values: chartTopProducts.map(x => x[1]),
+      x: 14,
+      y: chartY + 2,
+      width: 182,
+      color: [192, 120, 70]
+    });
+
+    // -------- Page 6: Inventory Consumption Charts --------
+    doc.addPage();
+    addHeader('Inventory Consumption Performance (Cement, Sand, Stone Powder)');
+
+    const consumption = { cement: 0, sand: 0, stonePowder: 0 };
+    allocations.forEach(a => {
+      const c = parseConsumption(a.SummaryText);
+      consumption.cement += c.cement;
+      consumption.sand += c.sand;
+      consumption.stonePowder += c.stonePowder;
+    });
+
+    const keyMaterials = ['cement', 'sand', 'stone powder'];
+    const stockMap = new Map();
+    inventory.forEach(i => {
+      const key = String(i.InventoryName || '').toLowerCase();
+      stockMap.set(key, Number(i.AvailableQuantity || 0));
+    });
+
+    const currentStockValues = [
+      stockMap.get('cement') || 0,
+      stockMap.get('sand') || 0,
+      stockMap.get('stone powder') || 0,
+    ];
+
+    const consumedValues = [
+      Number(consumption.cement.toFixed(2)),
+      Number(consumption.sand.toFixed(2)),
+      Number(consumption.stonePowder.toFixed(2)),
+    ];
+
+    let consumeChartY = 48;
+    consumeChartY = drawBarChart(doc, {
+      title: 'Material Consumption from Allocations (kg)',
+      labels: keyMaterials,
+      values: consumedValues,
+      x: 14,
+      y: consumeChartY,
+      width: 182,
+      color: [200, 92, 92]
+    });
+
+    drawBarChart(doc, {
+      title: 'Current Available Stock (kg)',
+      labels: keyMaterials,
+      values: currentStockValues,
+      x: 14,
+      y: consumeChartY + 6,
+      width: 182,
+      color: [94, 136, 207]
+    });
+
+    doc.setFontSize(9);
+    doc.setTextColor(95, 95, 95);
+    doc.text(`Data source: ${allocations.length} allocation record(s), ${inventory.length} inventory item(s)`, 14, 272);
+
     doc.save('marukawa-full-report.pdf');
   };
 
@@ -1143,6 +1345,7 @@ const ReportsView = () => {
   const reportCards = [
     // Individual report cards removed; using a single full PDF now
   ];
+  void reportCards;
 
   return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

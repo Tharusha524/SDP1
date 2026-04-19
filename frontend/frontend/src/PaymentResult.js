@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
@@ -154,12 +154,6 @@ const PaymentResult = ({ success }) => {
   const params = new URLSearchParams(location.search);
   const orderId = params.get('orderId');
 
-  const estimatedCompletionDate = useMemo(() => {
-    return location.state && location.state.estimatedCompletionDate
-      ? location.state.estimatedCompletionDate
-      : null;
-  }, [location.state]);
-
   const handlePrimary = () => {
     if (success && orderId) {
       navigate(`/customer/order/${orderId}`);
@@ -210,12 +204,6 @@ const PaymentResult = ({ success }) => {
             <InfoLabel>Provider</InfoLabel>
             <InfoValue>Card Payment</InfoValue>
           </div>
-          {estimatedCompletionDate && (
-            <div>
-              <InfoLabel>Estimated Completion</InfoLabel>
-              <InfoValue>{estimatedCompletionDate}</InfoValue>
-            </div>
-          )}
           <div>
             <InfoLabel>Next Step</InfoLabel>
             <InfoValue>{success ? 'We will begin processing your order.' : 'You can try the payment again.'}</InfoValue>

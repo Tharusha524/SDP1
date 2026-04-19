@@ -104,7 +104,7 @@ exports.allocateInventorySummary = async (req, res) => {
 
       if (materials.length === 0) continue;
 
-      const summaryText = `${orderId} - ` + materials
+      const summaryText = materials
         .map(m => `${m.name} ${m.qty}${m.unit}`)
         .join(', ');
 

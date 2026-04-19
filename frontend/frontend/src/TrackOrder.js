@@ -295,7 +295,7 @@ const TrackOrder = () => {
             id: o.OrderID,
             orderId: o.OrderID,
             status: `${o.Status}${o.Items ? ' — ' + o.Items : ''}`,
-            time: new Date(o.OrderDate).toLocaleString()
+            time: new Date(o.OrderDate || o.CreatedAt).toLocaleString()
           })));
         }
       })
@@ -319,7 +319,7 @@ const TrackOrder = () => {
         setTrackedOrder({
           id: o.OrderID,
           status: o.Status,
-          time: new Date(o.OrderDate).toLocaleString(),
+          time: new Date(o.OrderDate || o.CreatedAt).toLocaleString(),
           items: o.Items,
           estimated: o.EstimatedCompletionDate
             ? new Date(o.EstimatedCompletionDate).toLocaleDateString()

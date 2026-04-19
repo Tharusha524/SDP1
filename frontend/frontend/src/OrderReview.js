@@ -60,7 +60,7 @@ const OrderReview = () => {
         <h1 style={{ fontSize: '1.8rem', marginBottom: '12px', color: '#eab308' }}>Order Review</h1>
         <div style={{ marginBottom: '8px' }}><strong>Order ID:</strong> {order.OrderID}</div>
         <div style={{ marginBottom: '8px' }}><strong>Status:</strong> {order.Status}</div>
-        <div style={{ marginBottom: '8px' }}><strong>Placed on:</strong> {new Date(order.OrderDate).toLocaleString()}</div>
+        <div style={{ marginBottom: '8px' }}><strong>Placed on:</strong> {new Date(order.OrderDate || order.CreatedAt).toLocaleString()}</div>
         {order.Items && (
           <div style={{ marginBottom: '8px' }}><strong>Items:</strong> {order.Items}</div>
         )}

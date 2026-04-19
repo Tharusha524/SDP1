@@ -6,14 +6,18 @@ exports.getDashboardStats = async (req, res) => {
   try {
     const [[{ totalOrders }]] = await db.query('SELECT COUNT(*) AS totalOrders FROM orders');
     const [[{ pendingOrders }]] = await db.query("SELECT COUNT(*) AS pendingOrders FROM orders WHERE Status = 'Pending'");
-    const [[{ totalRevenue }]] = await db.query('SELECT COALESCE(SUM(Quantity * Price), 0) AS totalRevenue FROM orderitem');
+    const [[{ totalRevenue }]] = await db.query(`
+      SELECT COALESCE(SUM(oi.Quantity * oi.Price), 0) AS totalRevenue
+      FROM orders o
+      LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
+    `);
     const [[{ pendingTasks }]] = await db.query("SELECT COUNT(*) AS pendingTasks FROM task WHERE Status = 'Pending'");
     const [[{ activeInventory }]] = await db.query('SELECT COALESCE(SUM(AvailableQuantity), 0) AS activeInventory FROM inventory');
 
     const [recentOrders] = await db.query(`
       SELECT o.OrderID,
              COALESCE(c.Name, 'Unknown') AS CustomerName,
-             o.OrderDate,
+             o.CreatedAt AS OrderDate,
              o.Status,
              COALESCE(SUM(oi.Quantity * oi.Price), 0) AS TotalPrice,
              GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
@@ -21,8 +25,8 @@ exports.getDashboardStats = async (req, res) => {
       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
       LEFT JOIN product p ON oi.ProductID = p.ProductID
-      GROUP BY o.OrderID, c.Name, o.OrderDate, o.Status
-      ORDER BY o.OrderDate DESC
+      GROUP BY o.OrderID, c.Name, o.CreatedAt, o.Status
+      ORDER BY o.CreatedAt DESC
       LIMIT 5
     `);
 
@@ -86,6 +90,10 @@ exports.createTask = async (req, res) => {
       "INSERT INTO task (TaskID, AdminID, StaffID, OrderID, Description, Status) VALUES (?, ?, ?, ?, ?, 'Pending')",
       [taskId, adminId, staffId, orderId || null, description.trim()]
     );
+    await db.query(
+      "UPDATE staff SET Status = 'Busy', UpdatedAt = NOW() WHERE StaffID = ?",
+      [staffId]
+    );
     res.status(201).json({ success: true, taskId, message: 'Task assigned successfully' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -116,7 +124,7 @@ exports.getOrdersReport = async (req, res) => {
     const [orders] = await db.query(`
       SELECT o.OrderID,
              COALESCE(c.Name, 'Unknown') AS CustomerName,
-             o.OrderDate,
+             o.CreatedAt AS OrderDate,
              o.Status,
              COALESCE(SUM(oi.Quantity * oi.Price), 0) AS TotalPrice,
              GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
@@ -124,8 +132,8 @@ exports.getOrdersReport = async (req, res) => {
       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
       LEFT JOIN product p ON oi.ProductID = p.ProductID
-      GROUP BY o.OrderID, c.Name, o.OrderDate, o.Status
-      ORDER BY o.OrderDate DESC
+      GROUP BY o.OrderID, c.Name, o.CreatedAt, o.Status
+      ORDER BY o.CreatedAt DESC
     `);
     res.json({ success: true, orders });
   } catch (err) {

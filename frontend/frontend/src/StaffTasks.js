@@ -174,18 +174,6 @@ const TaskTable = styled.table`
   }
 `;
 
-const PriorityBadge = styled.span`
-  padding: 6px 14px;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  font-weight: 800;
-  border-radius: 20px;
-  background: ${props => props.type === 'High' ? 'rgba(239, 68, 68, 0.15)' : props.type === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'};
-  color: ${props => props.type === 'High' ? '#ff6b6b' : props.type === 'Medium' ? '#f59e0b' : '#10b981'};
-  border: 1px solid ${props => props.type === 'High' ? 'rgba(239, 68, 68, 0.3)' : props.type === 'Medium' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'};
-`;
-
 const StatusIndicator = styled.div`
   display: flex;
   align-items: center;
@@ -569,7 +557,7 @@ export default function StaffTasks() {
                           {order.Status}
                         </StatusIndicator>
                       </td>
-                      <td>{new Date(order.OrderDate).toLocaleString()}</td>
+                      <td>{new Date(order.OrderDate || order.CreatedAt).toLocaleString()}</td>
                       <td style={{ maxWidth: '220px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)' }}>
                         {order.Details || '—'}
                       </td>

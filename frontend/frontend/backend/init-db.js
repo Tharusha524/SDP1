@@ -33,7 +33,6 @@ const initDB = async () => {
         Price DECIMAL(10, 2) NOT NULL,
         Image VARCHAR(255),
         Category VARCHAR(50) DEFAULT 'General',
-        IsActive TINYINT(1) DEFAULT 1,
         CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )

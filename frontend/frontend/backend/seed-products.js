@@ -53,8 +53,8 @@ const PRODUCTS = [
 
       if (rows.length > 0) {
         const productId = rows[0].ProductID;
-        await db.query(
-          'UPDATE product SET Description = ?, Price = ?, Image = ?, IsActive = 1 WHERE ProductID = ?',
+           await db.query(
+             'UPDATE product SET Description = ?, Price = ?, Image = ? WHERE ProductID = ?',
           [p.description, p.price, p.image, productId]
         );
         console.log(`Updated existing product: ${p.name} (${productId})`);
