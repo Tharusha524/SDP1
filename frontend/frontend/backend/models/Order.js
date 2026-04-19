@@ -18,7 +18,7 @@ const Order = {
       const { productId, quantity, price } = item;
       const orderItemId = await generateOrderItemId(db);
       await db.query(
-        'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, Price) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase) VALUES (?, ?, ?, ?, ?)',
         [orderItemId, orderId, productId, quantity, price]
       );
     }
@@ -34,7 +34,7 @@ const Order = {
         o.CreatedAt AS OrderDate,
         o.Status,
         o.Address,
-        SUM(oi.Quantity * oi.Price) as TotalPrice,
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice,
         GROUP_CONCAT(CONCAT(p.Name, ' (x', oi.Quantity, ')') SEPARATOR ', ') as Items
       FROM orders o
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
@@ -58,7 +58,7 @@ const Order = {
         o.CreatedAt AS OrderDate,
         o.Status,
         o.Address,
-        SUM(oi.Quantity * oi.Price) as TotalPrice,
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice,
         SUM(oi.Quantity) as TotalQuantity,
         GROUP_CONCAT(CONCAT(p.Name, ' (x', oi.Quantity, ')') SEPARATOR ', ') as Items
       FROM orders o
@@ -83,7 +83,7 @@ const Order = {
         o.Status,
         o.Address,
         o.SpecialInstructions,
-        SUM(oi.Quantity * oi.Price) as TotalPrice
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice
       FROM orders o
       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
@@ -100,8 +100,8 @@ const Order = {
         oi.ProductID,
         p.Name as ProductName,
         oi.Quantity,
-        oi.Price,
-        (oi.Quantity * oi.Price) as Subtotal
+        oi.UnitPriceAtPurchase AS Price,
+        (oi.Quantity * oi.UnitPriceAtPurchase) as Subtotal
       FROM orderitem oi
       LEFT JOIN product p ON oi.ProductID = p.ProductID
       WHERE oi.OrderID = ?

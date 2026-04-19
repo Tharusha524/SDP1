@@ -278,9 +278,9 @@ const HandleInventory = () => {
     }
 
     const meaningful = orders.filter(o =>
-      (o.cement && parseFloat(o.cement) > 0) ||
-      (o.sand && parseFloat(o.sand) > 0) ||
-      (o.stone && parseFloat(o.stone) > 0)
+      (o.cement && parseInt(o.cement || '0', 10) > 0) ||
+      (o.sand && parseInt(o.sand || '0', 10) > 0) ||
+      (o.stone && parseInt(o.stone || '0', 10) > 0)
     );
 
     if (meaningful.length === 0) {
@@ -291,9 +291,9 @@ const HandleInventory = () => {
     const payload = {
       allocations: meaningful.map(o => ({
         orderId: o.id,
-        cement: o.cement || '0',
-        sand: o.sand || '0',
-        stone: o.stone || '0'
+        cement: String(parseInt(o.cement || '0', 10) || 0),
+        sand: String(parseInt(o.sand || '0', 10) || 0),
+        stone: String(parseInt(o.stone || '0', 10) || 0)
       }))
     };
 
@@ -409,6 +409,7 @@ const HandleInventory = () => {
                   <Input
                     type="number"
                     min="0"
+                    step="1"
                     placeholder="0"
                     value={order.cement}
                     onChange={(e) => handleInputChange(order.id, 'cement', e.target.value)}
@@ -418,6 +419,7 @@ const HandleInventory = () => {
                   <Input
                     type="number"
                     min="0"
+                    step="1"
                     placeholder="0"
                     value={order.sand}
                     onChange={(e) => handleInputChange(order.id, 'sand', e.target.value)}
@@ -427,6 +429,7 @@ const HandleInventory = () => {
                   <Input
                     type="number"
                     min="0"
+                    step="1"
                     placeholder="0"
                     value={order.stone}
                     onChange={(e) => handleInputChange(order.id, 'stone', e.target.value)}

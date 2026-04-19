@@ -59,7 +59,6 @@ const initDB = async () => {
       CREATE TABLE IF NOT EXISTS orders (
         OrderID VARCHAR(20) PRIMARY KEY,
         CustomerID VARCHAR(20) NOT NULL,
-        TotalPrice DECIMAL(10, 2) DEFAULT 0,
         Status ENUM('Pending', 'In Progress', 'Completed', 'Cancelled') DEFAULT 'Pending',
         Address VARCHAR(255),
         SpecialInstructions TEXT,
@@ -79,8 +78,7 @@ const initDB = async () => {
         OrderID VARCHAR(20) NOT NULL,
         ProductID VARCHAR(20) NOT NULL,
         Quantity INT NOT NULL,
-        Price DECIMAL(10, 2) NOT NULL,
-        Subtotal DECIMAL(10, 2) AS (Quantity * Price) STORED,
+        UnitPriceAtPurchase DECIMAL(10, 2) NOT NULL,
         FOREIGN KEY (OrderID) REFERENCES orders(OrderID),
         FOREIGN KEY (ProductID) REFERENCES product(ProductID)
       )
@@ -120,12 +118,11 @@ const initDB = async () => {
     `);
         console.log('Task table ready.');
 
-        // Create inventory_allocation table (one row per order with text summary)
+        // Create inventory_allocation table (allocation header per order)
         await connection.query(`
       CREATE TABLE IF NOT EXISTS inventory_allocation (
         AllocationID VARCHAR(20) PRIMARY KEY,
         OrderID VARCHAR(20) NOT NULL,
-        SummaryText VARCHAR(500),
         Status ENUM('Allocated', 'Reversed') DEFAULT 'Allocated',
         AllocatedBy VARCHAR(20) NOT NULL,
         CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -135,6 +132,32 @@ const initDB = async () => {
       )
     `);
         console.log('Inventory allocation table ready.');
+
+        // Create inventory_allocation_item table (normalized rows per allocated material)
+        await connection.query(`
+      CREATE TABLE IF NOT EXISTS inventory_allocation_item (
+        AllocationItemID VARCHAR(20) PRIMARY KEY,
+        AllocationID VARCHAR(20) NOT NULL,
+        InventoryID VARCHAR(20) NOT NULL,
+        Quantity DECIMAL(10, 2) NOT NULL,
+        UNIQUE KEY uq_allocation_inventory (AllocationID, InventoryID),
+        FOREIGN KEY (AllocationID) REFERENCES inventory_allocation(AllocationID) ON DELETE CASCADE
+      )
+    `);
+        console.log('Inventory allocation item table ready.');
+        // Ensure legacy timestamp columns removed from inventory_allocation_item if present
+        try {
+          const [cCreated] = await connection.query("SHOW COLUMNS FROM inventory_allocation_item LIKE 'CreatedAt'");
+          if (cCreated.length > 0) {
+            await connection.query('ALTER TABLE inventory_allocation_item DROP COLUMN CreatedAt');
+          }
+          const [cUpdated] = await connection.query("SHOW COLUMNS FROM inventory_allocation_item LIKE 'UpdatedAt'");
+          if (cUpdated.length > 0) {
+            await connection.query('ALTER TABLE inventory_allocation_item DROP COLUMN UpdatedAt');
+          }
+        } catch (e) {
+          // ignore if table does not exist yet or other harmless errors
+        }
 
         console.log('Database initialization complete!');
     } catch (err) {

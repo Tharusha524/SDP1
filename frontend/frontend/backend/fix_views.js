@@ -27,7 +27,7 @@ async function fixViews() {
         o.OrderID,
         o.OrderDate,
         o.Status as OrderStatus,
-        SUM(oi.Quantity * oi.Price) as TotalPrice,
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice,
         o.CustomerID,
         c.Name as CustomerName,
         c.Email as CustomerEmail,

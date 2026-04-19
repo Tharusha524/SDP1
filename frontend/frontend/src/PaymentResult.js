@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
@@ -151,8 +151,60 @@ const PaymentResult = ({ success }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState(null);
+
   const params = new URLSearchParams(location.search);
   const orderId = params.get('orderId');
+
+  const paymentStatusLabel = useMemo(() => {
+    if (!success) return 'Not completed';
+    if (finalizing) return 'Finalizing order...';
+    // Treat successful payment as Paid in the UI regardless of finalize errors.
+    return 'Paid';
+  }, [success, finalizing]);
+
+  useEffect(() => {
+    const runFinalize = async () => {
+      if (!success || !orderId) return;
+
+      setFinalizeError(null);
+      setFinalizing(true);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setFinalizing(false);
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const resp = await fetch('http://localhost:5000/api/payments/finalize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ orderId })
+        });
+
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) {
+          setFinalizeError(data.error || 'Could not save the order to the database.');
+          setFinalizing(false);
+          return;
+        }
+
+        setFinalizing(false);
+      } catch (e) {
+        console.error('Finalize error:', e);
+        setFinalizeError('Network error. Could not save the order to the database.');
+        setFinalizing(false);
+      }
+    };
+
+    runFinalize();
+  }, [success, orderId, navigate]);
 
   const handlePrimary = () => {
     if (success && orderId) {
@@ -198,11 +250,11 @@ const PaymentResult = ({ success }) => {
           )}
           <div>
             <InfoLabel>Payment Status</InfoLabel>
-            <InfoValue>{success ? 'Confirmed' : 'Not completed'}</InfoValue>
+            <InfoValue>{paymentStatusLabel}</InfoValue>
           </div>
           <div>
             <InfoLabel>Provider</InfoLabel>
-            <InfoValue>Card Payment</InfoValue>
+            <InfoValue>PayHere (Sandbox)</InfoValue>
           </div>
           <div>
             <InfoLabel>Next Step</InfoLabel>
@@ -214,10 +266,11 @@ const PaymentResult = ({ success }) => {
           A detailed receipt will be available in your order history. If you have
           any questions about this payment, please contact our support team with
           your order ID.
+          {finalizeError ? `\n\nOrder save error: ${finalizeError}` : ''}
         </Note>
 
         <ActionsRow>
-          <PrimaryButton onClick={handlePrimary}>
+          <PrimaryButton onClick={handlePrimary} disabled={success && orderId && finalizing}>
             {success
               ? orderId
                 ? 'View Order Details'

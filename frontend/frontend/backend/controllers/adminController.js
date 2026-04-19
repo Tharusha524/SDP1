@@ -7,7 +7,7 @@ exports.getDashboardStats = async (req, res) => {
     const [[{ totalOrders }]] = await db.query('SELECT COUNT(*) AS totalOrders FROM orders');
     const [[{ pendingOrders }]] = await db.query("SELECT COUNT(*) AS pendingOrders FROM orders WHERE Status = 'Pending'");
     const [[{ totalRevenue }]] = await db.query(`
-      SELECT COALESCE(SUM(oi.Quantity * oi.Price), 0) AS totalRevenue
+      SELECT COALESCE(SUM(oi.Quantity * oi.UnitPriceAtPurchase), 0) AS totalRevenue
       FROM orders o
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
     `);
@@ -19,7 +19,7 @@ exports.getDashboardStats = async (req, res) => {
              COALESCE(c.Name, 'Unknown') AS CustomerName,
              o.CreatedAt AS OrderDate,
              o.Status,
-             COALESCE(SUM(oi.Quantity * oi.Price), 0) AS TotalPrice,
+             COALESCE(SUM(oi.Quantity * oi.UnitPriceAtPurchase), 0) AS TotalPrice,
              GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
       FROM orders o
       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
@@ -121,21 +121,26 @@ exports.getInventory = async (req, res) => {
 // GET /api/admin/reports/orders
 exports.getOrdersReport = async (req, res) => {
   try {
-    const [orders] = await db.query(`
+    const [ordersWithPayments] = await db.query(`
       SELECT o.OrderID,
+             o.CustomerID,
              COALESCE(c.Name, 'Unknown') AS CustomerName,
              o.CreatedAt AS OrderDate,
+             o.UpdatedAt AS UpdatedAt,
              o.Status,
-             COALESCE(SUM(oi.Quantity * oi.Price), 0) AS TotalPrice,
-             GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items
+             COALESCE(SUM(oi.Quantity * oi.UnitPriceAtPurchase), 0) AS TotalPrice,
+             COALESCE(SUM(oi.Quantity), 0) AS TotalQuantity,
+             GROUP_CONCAT(CONCAT(p.Name, ' x', oi.Quantity) ORDER BY p.Name SEPARATOR ', ') AS Items,
+             COALESCE(SUM(CASE WHEN pay.Status = 'Paid' THEN pay.Amount ELSE 0 END), 0) AS AdvancePaid
       FROM orders o
       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
       LEFT JOIN product p ON oi.ProductID = p.ProductID
-      GROUP BY o.OrderID, c.Name, o.CreatedAt, o.Status
+      LEFT JOIN payment pay ON pay.OrderID = o.OrderID
+      GROUP BY o.OrderID, o.CustomerID, c.Name, o.CreatedAt, o.UpdatedAt, o.Status
       ORDER BY o.CreatedAt DESC
     `);
-    res.json({ success: true, orders });
+    res.json({ success: true, orders: ordersWithPayments || [] });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

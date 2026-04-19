@@ -73,6 +73,47 @@ const generateAllocationId = async () => {
   }
 };
 
+// Helper: generate AllocationItemID like RAI-0001
+const generateAllocationItemId = async () => {
+  try {
+    const [rows] = await db.query('SELECT AllocationItemID FROM inventory_allocation_item ORDER BY AllocationItemID DESC LIMIT 100');
+    const existingIds = rows.map(r => r.AllocationItemID);
+    return generateId('RAI', existingIds, 4);
+  } catch (err) {
+    const random = Math.floor(Math.random() * 9000) + 1000;
+    return `RAI-${random}`;
+  }
+};
+
+const buildAllocationSelectQuery = () => `
+      SELECT ia.AllocationID,
+             ia.OrderID,
+             NULLIF(
+               GROUP_CONCAT(
+                 CONCAT(
+                   LOWER(inv.InventoryName),
+                   ' ',
+                   TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(iai.Quantity AS CHAR))),
+                   'kg'
+                 )
+                 ORDER BY inv.InventoryName SEPARATOR ', '
+               ),
+               ''
+             ) AS SummaryText,
+             ia.Status,
+             ia.AllocatedBy,
+             ia.UpdatedAt,
+             o.CustomerID,
+             COALESCE(c.Name, 'Unknown') AS CustomerName
+      FROM inventory_allocation ia
+      LEFT JOIN inventory_allocation_item iai ON ia.AllocationID = iai.AllocationID
+      LEFT JOIN inventory inv ON iai.InventoryID = inv.InventoryID
+      LEFT JOIN orders o ON ia.OrderID = o.OrderID
+      LEFT JOIN customer c ON o.CustomerID = c.CustomerID
+      GROUP BY ia.AllocationID, ia.OrderID, ia.Status, ia.AllocatedBy, ia.UpdatedAt, o.CustomerID, c.Name
+      ORDER BY ia.UpdatedAt DESC
+    `;
+
 // POST /api/inventory/allocate
 // Body: { allocations: [ { orderId, cement, sand, stone } ] }
 exports.allocateInventorySummary = async (req, res) => {
@@ -87,26 +128,30 @@ exports.allocateInventorySummary = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
+    const [inventoryRows] = await db.query('SELECT InventoryID, LOWER(InventoryName) AS InventoryName FROM inventory');
+    const materialInventoryMap = {
+      cement: (inventoryRows.find(r => String(r.InventoryName).includes('cement')) || {}).InventoryID,
+      sand: (inventoryRows.find(r => String(r.InventoryName).includes('sand')) || {}).InventoryID,
+      'stone powder': (inventoryRows.find(r => String(r.InventoryName).includes('stone') || String(r.InventoryName).includes('powder')) || {}).InventoryID
+    };
+
     let savedCount = 0;
 
     for (const alloc of allocations) {
       const orderId = alloc.orderId;
       if (!orderId) continue;
 
-      const cement = parseFloat(alloc.cement || 0) || 0;
-      const sand = parseFloat(alloc.sand || 0) || 0;
-      const stone = parseFloat(alloc.stone || 0) || 0;
+      // Quantities must be integers in the DB; round any fractional input to nearest integer
+      const cement = Math.max(0, Math.round(parseFloat(alloc.cement || 0) || 0));
+      const sand = Math.max(0, Math.round(parseFloat(alloc.sand || 0) || 0));
+      const stone = Math.max(0, Math.round(parseFloat(alloc.stone || 0) || 0));
 
       const materials = [];
-      if (cement > 0) materials.push({ name: 'cement', qty: cement, unit: 'kg' });
-      if (sand > 0) materials.push({ name: 'sand', qty: sand, unit: 'kg' });
-      if (stone > 0) materials.push({ name: 'stone powder', qty: stone, unit: 'kg' });
+      if (cement > 0) materials.push({ name: 'cement', qty: cement });
+      if (sand > 0) materials.push({ name: 'sand', qty: sand });
+      if (stone > 0) materials.push({ name: 'stone powder', qty: stone });
 
       if (materials.length === 0) continue;
-
-      const summaryText = materials
-        .map(m => `${m.name} ${m.qty}${m.unit}`)
-        .join(', ');
 
       // If an allocation already exists for this order, update it; otherwise insert new
       const [[existing]] = await db.query(
@@ -114,16 +159,32 @@ exports.allocateInventorySummary = async (req, res) => {
         [orderId]
       );
 
+      let allocationId;
       if (existing && existing.AllocationID) {
+        allocationId = existing.AllocationID;
         await db.query(
-          'UPDATE inventory_allocation SET SummaryText = ?, AllocatedBy = ?, UpdatedAt = NOW() WHERE AllocationID = ?',
-          [summaryText, userId, existing.AllocationID]
+          'UPDATE inventory_allocation SET AllocatedBy = ?, UpdatedAt = NOW() WHERE AllocationID = ?',
+          [userId, allocationId]
         );
       } else {
-        const allocationId = await generateAllocationId();
+        allocationId = await generateAllocationId();
         await db.query(
-            'INSERT INTO inventory_allocation (AllocationID, OrderID, SummaryText, Status, AllocatedBy) VALUES (?, ?, ?, ?, ?)',
-            [allocationId, orderId, summaryText, 'Allocated', userId]
+            'INSERT INTO inventory_allocation (AllocationID, OrderID, Status, AllocatedBy) VALUES (?, ?, ?, ?)',
+            [allocationId, orderId, 'Allocated', userId]
+        );
+      }
+
+      await db.query('DELETE FROM inventory_allocation_item WHERE AllocationID = ?', [allocationId]);
+
+      for (const material of materials) {
+        const inventoryId = materialInventoryMap[material.name];
+        if (!inventoryId) continue;
+
+        const allocationItemId = await generateAllocationItemId();
+        const qtyInt = Math.max(0, Math.round(Number(material.qty) || 0));
+        await db.query(
+          'INSERT INTO inventory_allocation_item (AllocationItemID, AllocationID, InventoryID, Quantity) VALUES (?, ?, ?, ?)',
+          [allocationItemId, allocationId, inventoryId, qtyInt]
         );
       }
 
@@ -134,16 +195,7 @@ exports.allocateInventorySummary = async (req, res) => {
       return res.status(400).json({ success: false, error: 'No valid material quantities provided' });
     }
     // Return current list of allocated inventory summaries so UI can always show all allocations
-    const [rows] = await db.query(
-          `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.Status,
-            ia.AllocatedBy, ia.UpdatedAt,
-            o.CustomerID,
-            COALESCE(c.Name, 'Unknown') AS CustomerName
-       FROM inventory_allocation ia
-           LEFT JOIN orders o ON ia.OrderID = o.OrderID
-           LEFT JOIN customer c ON o.CustomerID = c.CustomerID
-       ORDER BY ia.UpdatedAt DESC`
-    );
+    const [rows] = await db.query(buildAllocationSelectQuery());
 
     return res.status(201).json({ success: true, savedCount, allocations: rows, message: 'Inventory allocation summaries saved' });
   } catch (err) {
@@ -155,16 +207,7 @@ exports.allocateInventorySummary = async (req, res) => {
 // Returns all allocated inventory summaries so admin can always see history
 exports.getInventoryAllocations = async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT ia.AllocationID, ia.OrderID, ia.SummaryText, ia.Status,
-              ia.AllocatedBy, ia.UpdatedAt,
-              o.CustomerID,
-              COALESCE(c.Name, 'Unknown') AS CustomerName
-       FROM inventory_allocation ia
-       LEFT JOIN orders o ON ia.OrderID = o.OrderID
-       LEFT JOIN customer c ON o.CustomerID = c.CustomerID
-       ORDER BY ia.UpdatedAt DESC`
-    );
+    const [rows] = await db.query(buildAllocationSelectQuery());
     return res.json({ success: true, allocations: rows });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

@@ -90,7 +90,6 @@ CREATE TABLE IF NOT EXISTS `product` (
 CREATE TABLE IF NOT EXISTS `orders` (
   `OrderID` VARCHAR(20) PRIMARY KEY,
   `CustomerID` VARCHAR(20) NOT NULL,
-  `TotalPrice` DECIMAL(10,2) NOT NULL,
   `Status` ENUM('Pending','In Progress','Completed','Cancelled') DEFAULT 'Pending',
   `Address` VARCHAR(255),
   `SpecialInstructions` TEXT,
@@ -105,8 +104,7 @@ CREATE TABLE IF NOT EXISTS `orderitem` (
   `OrderID` VARCHAR(20) NOT NULL,
   `ProductID` VARCHAR(20) NOT NULL,
   `Quantity` INT NOT NULL,
-  `Price` DECIMAL(10,2) NOT NULL,
-  `Subtotal` DECIMAL(10,2) AS (`Quantity` * `Price`) STORED,
+  `UnitPriceAtPurchase` DECIMAL(10,2) NOT NULL,
   FOREIGN KEY (`OrderID`) REFERENCES `orders`(`OrderID`),
   FOREIGN KEY (`ProductID`) REFERENCES `product`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -5,7 +5,11 @@ import { useNavigate } from "react-router-dom";
 import HandleInventory from "./HandleInventory.js";
 import CatalogManage from "./CatalogManage.js";
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement } from 'chart.js';
+import { Pie, Bar, Line } from 'react-chartjs-2';
+import html2canvas from 'html2canvas';
+
+ChartJS.register(ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement);
 
 const API_BASE = 'http://localhost:5000';
 const getAuthHeaders = () => ({
@@ -855,7 +859,6 @@ const StockAlertsView = () => {
 const ReportsView = () => {
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
-  const [allocations, setAllocations] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -865,64 +868,14 @@ const ReportsView = () => {
     Promise.all([
       fetch(`${API_BASE}/api/admin/reports/orders`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/inventory`, { headers }).then(r => r.json()),
-      fetch(`${API_BASE}/api/inventory/allocations`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/admin/tasks`, { headers }).then(r => r.json()),
-    ]).then(([ord, inv, alloc, tsk]) => {
+    ]).then(([ord, inv, tsk]) => {
       if (ord.success) setOrders(ord.orders);
       if (inv.success) setInventory(inv.inventory);
-      if (alloc.success) setAllocations(alloc.allocations);
       if (tsk.success) setTasks(tsk.tasks);
     }).catch(() => setError('Failed to load report data.'))
       .finally(() => setLoading(false));
   }, []);
-
-  const drawBarChart = (doc, {
-    title,
-    labels,
-    values,
-    x,
-    y,
-    width = 180,
-    barHeight = 7,
-    gap = 5,
-    color = [192, 160, 98]
-  }) => {
-    doc.setFontSize(11);
-    doc.setTextColor(40, 40, 40);
-    doc.text(title, x, y);
-
-    if (!labels.length || !values.length) {
-      doc.setFontSize(9);
-      doc.setTextColor(120, 120, 120);
-      doc.text('No data available', x, y + 8);
-      return y + 18;
-    }
-
-    const maxValue = Math.max(...values, 1);
-    let barY = y + 6;
-
-    labels.forEach((label, idx) => {
-      const value = Number(values[idx] || 0);
-      const barWidth = (value / maxValue) * (width - 70);
-
-      doc.setFontSize(9);
-      doc.setTextColor(70, 70, 70);
-      doc.text(String(label).slice(0, 24), x, barY + 5);
-
-      doc.setFillColor(235, 235, 235);
-      doc.rect(x + 48, barY, width - 70, barHeight, 'F');
-
-      doc.setFillColor(color[0], color[1], color[2]);
-      doc.rect(x + 48, barY, barWidth, barHeight, 'F');
-
-      doc.setTextColor(50, 50, 50);
-      doc.text(value.toLocaleString(), x + width - 18, barY + 5, { align: 'right' });
-
-      barY += barHeight + gap;
-    });
-
-    return barY + 2;
-  };
 
   const parseOrderItems = (itemsText) => {
     const map = new Map();
@@ -942,379 +895,91 @@ const ReportsView = () => {
     return map;
   };
 
-  const parseConsumption = (summaryText) => {
-    const text = String(summaryText || '').toLowerCase();
-    const pick = (pattern) => {
-      const m = text.match(pattern);
-      return m ? parseFloat(m[1]) || 0 : 0;
-    };
+  // New: fetch customers and provide separate exports for Customer/Inventory/Order reports
+  const [customers, setCustomers] = useState([]);
 
-    return {
-      cement: pick(/cement\s+([\d.]+)/i),
-      sand: pick(/sand\s+([\d.]+)/i),
-      stonePowder: pick(/stone\s+powder\s+([\d.]+)/i),
-    };
-  };
+  useEffect(() => {
+    // Fetch customers if endpoint exists; otherwise derive minimal list from orders.
+    fetch(`${API_BASE}/api/admin/customers`, { headers: getAuthHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.success && Array.isArray(data.customers)) setCustomers(data.customers);
+      })
+      .catch(() => {
+        const map = new Map();
+        orders.forEach(o => {
+          const id = o.CustomerID || o.CustomerName || 'unknown';
+          if (!map.has(id)) {
+            map.set(id, {
+              CustomerID: id,
+              Name: o.CustomerName || 'Unknown',
+              ContactNo: o.CustomerContact || '',
+              Email: o.CustomerEmail || '',
+              Address: o.CustomerAddress || '',
+              RegistrationDate: o.CustomerRegisteredAt || o.OrderDate || null,
+            });
+          }
+        });
+        setCustomers(Array.from(map.values()));
+      });
+  }, [orders]);
 
-  const downloadPDF = (type) => {
-    const doc = new jsPDF();
+  const exportElementToPDF = async (elementId, filename) => {
+    const doc = new jsPDF('p', 'pt', 'a4');
     const now = new Date().toLocaleString();
-
-    doc.setFontSize(20);
-    doc.setTextColor(192, 160, 98);
-    doc.text('Marukawa Concrete Works', 14, 18);
+    doc.setFontSize(16);
+    doc.setTextColor(33, 33, 33);
+    doc.text('Marukawa Cement Works', 40, 40);
     doc.setFontSize(9);
-    doc.setTextColor(130, 130, 130);
-    doc.text(`Generated: ${now}`, 14, 26);
-    doc.setDrawColor(192, 160, 98);
-    doc.setLineWidth(0.5);
-    doc.line(14, 30, 196, 30);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated: ${now}`, 40, 56);
 
-    if (type === 'orders') {
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Orders Report', 14, 40);
-      autoTable(doc, {
-        startY: 46,
-        head: [['Order ID', 'Customer', 'Date', 'Status', 'Total (Rs.)']],
-        body: orders.map(o => [
-          o.OrderID,
-          o.CustomerName,
-          o.OrderDate ? new Date(o.OrderDate).toLocaleDateString() : 'N/A',
-          o.Status,
-          Number(o.TotalPrice).toLocaleString()
-        ]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 245, 240] },
-      });
-      doc.save('orders-report.pdf');
+    const node = document.getElementById(elementId);
+    if (!node) {
+      doc.text('No report content available', 40, 80);
+      doc.save(filename);
+      return;
+    }
 
-    } else if (type === 'inventory') {
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Inventory Report', 14, 40);
-      autoTable(doc, {
-        startY: 46,
-        head: [['ID', 'Inventory Name', 'Qty Available', 'Min Threshold', 'Status', 'Last Updated']],
-        body: inventory.map(i => [
-          i.InventoryID,
-          i.InventoryName,
-          i.AvailableQuantity,
-          i.MinimumThreshold,
-          i.AvailableQuantity <= i.MinimumThreshold ? 'LOW STOCK' : 'OK',
-          i.LastUpdated ? new Date(i.LastUpdated).toLocaleDateString() : 'N/A'
-        ]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 245, 240] },
-      });
-      doc.save('inventory-report.pdf');
+    try {
+      const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const imgProps = doc.getImageProperties(imgData);
+      const pdfWidth = doc.internal.pageSize.getWidth() - 80;
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-    } else if (type === 'tasks') {
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Staff Tasks Report', 14, 40);
-      autoTable(doc, {
-        startY: 46,
-        head: [['Task ID', 'Staff', 'Description', 'Priority', 'Status', 'Assigned']],
-        body: tasks.map(t => [
-          t.TaskID,
-          t.StaffName,
-          t.Description,
-          t.Priority,
-          t.Status,
-          t.AssignedDate ? new Date(t.AssignedDate).toLocaleDateString() : 'N/A'
-        ]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 245, 240] },
-      });
-      doc.save('staff-tasks-report.pdf');
+      // Multi-page export (prevents long reports being cropped)
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const topOffsetFirstPage = 80;
+      const bottomMargin = 40;
+      const usableHeightFirstPage = pageHeight - topOffsetFirstPage - bottomMargin;
+      const usableHeightNextPages = pageHeight - 40 - bottomMargin;
+
+      // First page
+      doc.addImage(imgData, 'PNG', 40, topOffsetFirstPage, pdfWidth, pdfHeight);
+
+      // Additional pages (render same image with negative y-offset)
+      let heightLeft = pdfHeight - usableHeightFirstPage;
+      let pageOffset = usableHeightFirstPage;
+      while (heightLeft > 0) {
+        doc.addPage();
+        const y = 40 - pageOffset;
+        doc.addImage(imgData, 'PNG', 40, y, pdfWidth, pdfHeight);
+        heightLeft -= usableHeightNextPages;
+        pageOffset += usableHeightNextPages;
+      }
+
+      doc.save(filename);
+    } catch (e) {
+      console.error('Export error:', e);
+      doc.text('Failed to export report image', 40, 80);
+      doc.save(filename);
     }
   };
-  void downloadPDF;
 
-  const downloadFullReport = () => {
-    const doc = new jsPDF();
-    const now = new Date().toLocaleString();
-
-    const addHeader = (title) => {
-      doc.setFontSize(20);
-      doc.setTextColor(192, 160, 98);
-      doc.text('Marukawa Concrete Works', 14, 18);
-      doc.setFontSize(9);
-      doc.setTextColor(130, 130, 130);
-      doc.text(`Generated: ${now}`, 14, 26);
-      doc.setDrawColor(192, 160, 98);
-      doc.setLineWidth(0.5);
-      doc.line(14, 30, 196, 30);
-
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text(title, 14, 40);
-    };
-
-    // -------- Page 1: Business Performance & Customer Behaviour --------
-    addHeader('Business Performance & Customer Insights');
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
-
-    const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
-    const completionRate = orders.length ? (completedOrders / orders.length) * 100 : 0;
-
-    // Monitor business performance
-    doc.text(`Total Orders: ${orders.length}`, 14, 48);
-    doc.text(`Completed Orders: ${completedOrders} (${completionRate.toFixed(1)}% completion)`, 14, 54);
-    doc.text(`Total Revenue: Rs. ${totalRevenue.toLocaleString()}`, 14, 60);
-    doc.text(`Average Order Value: Rs. ${avgOrderValue.toFixed(2)}`, 14, 66);
-
-    // Customer behaviour: top customers and repeat vs new
-    const customerMap = new Map();
-    orders.forEach(o => {
-      const name = o.CustomerName || 'Unknown';
-      const prev = customerMap.get(name) || { count: 0, revenue: 0 };
-      customerMap.set(name, {
-        count: prev.count + 1,
-        revenue: prev.revenue + Number(o.TotalPrice || 0)
-      });
-    });
-
-    const customerStats = Array.from(customerMap.entries());
-    const repeatCustomers = customerStats.filter(c => c[1].count > 1).length;
-    const newCustomers = customerStats.filter(c => c[1].count === 1).length;
-    const topCustomers = customerStats
-      .sort((a, b) => b[1].revenue - a[1].revenue)
-      .slice(0, 5)
-      .map(([name, v]) => `${name} (${v.count} orders, Rs. ${v.revenue.toLocaleString()})`);
-
-    doc.text(`New Customers: ${newCustomers}`, 120, 48);
-    doc.text(`Repeat Customers: ${repeatCustomers}`, 120, 54);
-    doc.text('Top Customers:', 120, 60);
-    topCustomers.forEach((line, idx) => {
-      doc.text(`- ${line}`, 120, 66 + idx * 6);
-    });
-
-    // Product popularity (what products are ordered many times)
-    const productMap = new Map();
-    orders.forEach(o => {
-      if (!o.Items) return;
-      String(o.Items).split(',').forEach(raw => {
-        const part = raw.trim();
-        if (!part) return;
-        const match = part.match(/(.+)\sx(\d+)/);
-        const name = (match ? match[1] : part).trim();
-        const qty = match ? parseInt(match[2], 10) || 1 : 1;
-        const prev = productMap.get(name) || { orders: 0, quantity: 0 };
-        productMap.set(name, {
-          orders: prev.orders + 1,
-          quantity: prev.quantity + qty
-        });
-      });
-    });
-
-    const topProducts = Array.from(productMap.entries())
-      .sort((a, b) => b[1].quantity - a[1].quantity)
-      .slice(0, 5);
-
-    let productsStartY = 66 + topCustomers.length * 6 + 8;
-    if (productsStartY < 80) productsStartY = 80;
-
-    doc.text('Most Ordered Products (by qty):', 14, productsStartY);
-    topProducts.forEach(([name, info], idx) => {
-      doc.text(`- ${name}: ${info.quantity} units in ${info.orders} orders`, 14, productsStartY + 6 + idx * 6);
-    });
-
-    // -------- Page 2: Orders Detail (decision support for promotions, pricing, restocking) --------
-    doc.addPage();
-    addHeader('Orders Detail (Sales Performance)');
-    autoTable(doc, {
-      startY: 46,
-      head: [['Order ID', 'Customer', 'Date', 'Status', 'Total (Rs.)']],
-      body: orders.map(o => [
-        o.OrderID,
-        o.CustomerName,
-        o.OrderDate ? new Date(o.OrderDate).toLocaleDateString() : 'N/A',
-        o.Status,
-        Number(o.TotalPrice).toLocaleString()
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 245, 240] },
-    });
-
-    // -------- Page 3: Inventory & Restocking Decisions --------
-    doc.addPage();
-    addHeader('Inventory & Restocking Insights');
-
-    const lowStockItems = inventory.filter(i => i.AvailableQuantity <= i.MinimumThreshold);
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`Total Inventory Items: ${inventory.length}`, 14, 48);
-    doc.text(`Low Stock Items (need restock): ${lowStockItems.length}`, 14, 54);
-
-    autoTable(doc, {
-      startY: 60,
-      head: [['ID', 'Inventory Name', 'Qty Available', 'Min Threshold', 'Status', 'Last Updated']],
-      body: inventory.map(i => [
-        i.InventoryID,
-        i.InventoryName,
-        i.AvailableQuantity,
-        i.MinimumThreshold,
-        i.AvailableQuantity <= i.MinimumThreshold ? 'LOW STOCK' : 'OK',
-        i.LastUpdated ? new Date(i.LastUpdated).toLocaleDateString() : 'N/A'
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 245, 240] },
-    });
-
-    // -------- Page 4: Staff Tasks & Operational Load --------
-    doc.addPage();
-    addHeader('Staff Tasks & Operational Load');
-
-    const pendingTasksCount = tasks.filter(t => t.Status === 'Pending').length;
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`Total Tasks: ${tasks.length}`, 14, 48);
-    doc.text(`Pending Tasks: ${pendingTasksCount}`, 14, 54);
-
-    autoTable(doc, {
-      startY: 60,
-      head: [['Task ID', 'Staff', 'Description', 'Priority', 'Status', 'Assigned']],
-      body: tasks.map(t => [
-        t.TaskID,
-        t.StaffName,
-        t.Description,
-        t.Priority,
-        t.Status,
-        t.AssignedDate ? new Date(t.AssignedDate).toLocaleDateString() : 'N/A'
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [192, 160, 98], textColor: [0, 0, 0], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 245, 240] },
-    });
-
-    // -------- Page 5: Charts (Customer / Order / Product Performance) --------
-    doc.addPage();
-    addHeader('Performance Charts (Customer, Order, Product)');
-
-    const customerRevenueMap = new Map();
-    const orderStatusMap = new Map();
-    const productQtyMap = new Map();
-
-    orders.forEach(o => {
-      const customer = o.CustomerName || 'Unknown';
-      customerRevenueMap.set(customer, (customerRevenueMap.get(customer) || 0) + Number(o.TotalPrice || 0));
-
-      const status = o.Status || 'Unknown';
-      orderStatusMap.set(status, (orderStatusMap.get(status) || 0) + 1);
-
-      const parsed = parseOrderItems(o.Items);
-      parsed.forEach((qty, productName) => {
-        productQtyMap.set(productName, (productQtyMap.get(productName) || 0) + qty);
-      });
-    });
-
-    const chartTopCustomers = Array.from(customerRevenueMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    const statusCounts = ['Pending', 'In Progress', 'Completed', 'Cancelled'].map(s => [s, orderStatusMap.get(s) || 0]);
-
-    const chartTopProducts = Array.from(productQtyMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    let chartY = 48;
-    chartY = drawBarChart(doc, {
-      title: 'Top Customers by Revenue (Rs.)',
-      labels: chartTopCustomers.map(x => x[0]),
-      values: chartTopCustomers.map(x => Math.round(x[1])),
-      x: 14,
-      y: chartY,
-      width: 182,
-      color: [64, 132, 188]
-    });
-
-    chartY = drawBarChart(doc, {
-      title: 'Order Status Distribution (Count)',
-      labels: statusCounts.map(x => x[0]),
-      values: statusCounts.map(x => x[1]),
-      x: 14,
-      y: chartY + 2,
-      width: 182,
-      color: [120, 166, 86]
-    });
-
-    drawBarChart(doc, {
-      title: 'Top Products by Quantity Ordered',
-      labels: chartTopProducts.map(x => x[0]),
-      values: chartTopProducts.map(x => x[1]),
-      x: 14,
-      y: chartY + 2,
-      width: 182,
-      color: [192, 120, 70]
-    });
-
-    // -------- Page 6: Inventory Consumption Charts --------
-    doc.addPage();
-    addHeader('Inventory Consumption Performance (Cement, Sand, Stone Powder)');
-
-    const consumption = { cement: 0, sand: 0, stonePowder: 0 };
-    allocations.forEach(a => {
-      const c = parseConsumption(a.SummaryText);
-      consumption.cement += c.cement;
-      consumption.sand += c.sand;
-      consumption.stonePowder += c.stonePowder;
-    });
-
-    const keyMaterials = ['cement', 'sand', 'stone powder'];
-    const stockMap = new Map();
-    inventory.forEach(i => {
-      const key = String(i.InventoryName || '').toLowerCase();
-      stockMap.set(key, Number(i.AvailableQuantity || 0));
-    });
-
-    const currentStockValues = [
-      stockMap.get('cement') || 0,
-      stockMap.get('sand') || 0,
-      stockMap.get('stone powder') || 0,
-    ];
-
-    const consumedValues = [
-      Number(consumption.cement.toFixed(2)),
-      Number(consumption.sand.toFixed(2)),
-      Number(consumption.stonePowder.toFixed(2)),
-    ];
-
-    let consumeChartY = 48;
-    consumeChartY = drawBarChart(doc, {
-      title: 'Material Consumption from Allocations (kg)',
-      labels: keyMaterials,
-      values: consumedValues,
-      x: 14,
-      y: consumeChartY,
-      width: 182,
-      color: [200, 92, 92]
-    });
-
-    drawBarChart(doc, {
-      title: 'Current Available Stock (kg)',
-      labels: keyMaterials,
-      values: currentStockValues,
-      x: 14,
-      y: consumeChartY + 6,
-      width: 182,
-      color: [94, 136, 207]
-    });
-
-    doc.setFontSize(9);
-    doc.setTextColor(95, 95, 95);
-    doc.text(`Data source: ${allocations.length} allocation record(s), ${inventory.length} inventory item(s)`, 14, 272);
-
-    doc.save('marukawa-full-report.pdf');
-  };
+  const exportCustomerReport = () => exportElementToPDF('report-export-customers', 'customers-report.pdf');
+  const exportInventoryReport = () => exportElementToPDF('report-export-inventory', 'inventory-report.pdf');
+  const exportOrderReport = () => exportElementToPDF('report-export-orders', 'orders-report.pdf');
 
   if (loading) return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1329,9 +994,103 @@ const ReportsView = () => {
   );
 
   const completedOrders = orders.filter(o => o.Status === 'Completed').length;
-  const totalRevenue = orders.reduce((sum, o) => sum + Number(o.TotalPrice), 0);
-  const lowStockCount = inventory.filter(i => i.AvailableQuantity <= i.MinimumThreshold).length;
+  const totalRevenue = orders.reduce((sum, o) => sum + Number(o.TotalPrice || 0), 0);
+  const lowStockCount = inventory.filter(i => Number(i.AvailableQuantity || 0) <= Number(i.MinimumThreshold || 0)).length;
   const pendingTasks = tasks.filter(t => t.Status === 'Pending').length;
+
+  // Customer segmentation (used to compute returning customers)
+  const customerMap = new Map();
+  orders.forEach(o => {
+    const id = o.CustomerID || o.CustomerName || 'Unknown';
+    const prev = customerMap.get(id) || { count: 0, revenue: 0 };
+    customerMap.set(id, { count: prev.count + 1, revenue: prev.revenue + Number(o.TotalPrice || 0), name: o.CustomerName });
+  });
+  const customerStatsArr = Array.from(customerMap.entries()).map(([id, v]) => ({ id, ...v }));
+  const returningCustomersCount = customerStatsArr.filter(c => c.count > 1).length;
+
+  const safeDate = (value) => {
+    if (!value) return null;
+    try {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
+  const sumOrdersRevenue = orders.reduce((sum, o) => sum + Number(o.TotalPrice || 0), 0);
+  const sumAdvancePaid = orders.reduce((sum, o) => sum + Number(o.AdvancePaid || 0), 0);
+  const averageOrderValue = orders.length > 0 ? (sumOrdersRevenue / orders.length) : 0;
+
+  const orderStatusLabels = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
+  const orderStatusCounts = orderStatusLabels.map(s => orders.filter(o => o.Status === s).length);
+
+  // Orders by month (count + revenue)
+  const ordersByMonthMap = new Map();
+  const revenueByMonthMap = new Map();
+  orders.forEach(o => {
+    const d = safeDate(o.OrderDate);
+    if (!d) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    ordersByMonthMap.set(key, (ordersByMonthMap.get(key) || 0) + 1);
+    revenueByMonthMap.set(key, (revenueByMonthMap.get(key) || 0) + Number(o.TotalPrice || 0));
+  });
+  const ordersByMonthSeries = Array.from(ordersByMonthMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const ordersByMonthLabels = ordersByMonthSeries.map(x => x[0]);
+  const ordersByMonthValues = ordersByMonthSeries.map(x => x[1]);
+
+  // Customer growth by month (first-ever order per customer)
+  const firstOrderByCustomer = new Map();
+  orders.forEach(o => {
+    const custKey = o.CustomerID || o.CustomerName || 'Unknown';
+    const d = safeDate(o.OrderDate);
+    if (!d) return;
+    const prev = firstOrderByCustomer.get(custKey);
+    if (!prev || d < prev) firstOrderByCustomer.set(custKey, d);
+  });
+  const customerGrowthMap = new Map();
+  firstOrderByCustomer.forEach(d => {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    customerGrowthMap.set(key, (customerGrowthMap.get(key) || 0) + 1);
+  });
+  const customerGrowthSeries = Array.from(customerGrowthMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const customerGrowthLabels = customerGrowthSeries.map(x => x[0]);
+  const customerGrowthValues = customerGrowthSeries.map(x => x[1]);
+
+  // Customer segments by order count
+  const segmentCounts = { New: 0, Active: 0, Loyal: 0 };
+  customerStatsArr.forEach(c => {
+    if ((c.count || 0) <= 1) segmentCounts.New += 1;
+    else if ((c.count || 0) <= 3) segmentCounts.Active += 1;
+    else segmentCounts.Loyal += 1;
+  });
+  const segmentLabels = Object.keys(segmentCounts);
+  const segmentValues = segmentLabels.map(k => segmentCounts[k]);
+
+  // Inventory summaries
+  const totalStockQty = inventory.reduce((sum, i) => sum + Number(i.AvailableQuantity || 0), 0);
+  const latestInventoryUpdate = inventory.reduce((latest, i) => {
+    const d = safeDate(i.LastUpdated);
+    if (!d) return latest;
+    if (!latest) return d;
+    return d > latest ? d : latest;
+  }, null);
+
+  // Customer "active" definition (customers with an order in last 90 days)
+  const now = new Date();
+  const activeCustomerIds = new Set();
+  orders.forEach(o => {
+    const d = safeDate(o.OrderDate);
+    if (!d) return;
+    const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays <= 90) activeCustomerIds.add(o.CustomerID || o.CustomerName || 'Unknown');
+  });
+
+  const truncateLabel = (value, max = 18) => {
+    const s = String(value || '');
+    if (s.length <= max) return s;
+    return `${s.slice(0, Math.max(0, max - 1))}…`;
+  };
 
   const summaryStats = [
     { label: 'Total Orders', value: orders.length },
@@ -1340,7 +1099,53 @@ const ReportsView = () => {
     { label: 'Low Stock Items', value: lowStockCount },
     { label: 'Pending Tasks', value: pendingTasks },
     { label: 'Total Tasks', value: tasks.length },
+    { label: 'Returning Customers', value: returningCustomersCount },
   ];
+
+  const exportBarOptions = (titleText, xTitle, yTitle, overrides = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      title: { display: true, text: titleText, color: '#111827', font: { size: 14, weight: '700' }, padding: { bottom: 8 } },
+      legend: { display: true, position: 'bottom', labels: { color: '#111827', font: { size: 11 }, boxWidth: 12 } },
+      tooltip: { enabled: true },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#111827', font: { size: 11 }, maxRotation: 40, minRotation: 0 },
+        title: { display: !!xTitle, text: xTitle, color: '#111827', font: { size: 12, weight: '600' } },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      },
+      y: {
+        ticks: { color: '#111827', font: { size: 11 } },
+        title: { display: !!yTitle, text: yTitle, color: '#111827', font: { size: 12, weight: '600' } },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      },
+    },
+    ...overrides,
+  });
+
+  const exportPieOptions = (titleText) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      title: { display: true, text: titleText, color: '#111827', font: { size: 14, weight: '700' }, padding: { bottom: 8 } },
+      legend: { display: true, position: 'right', labels: { color: '#111827', font: { size: 11 }, boxWidth: 12 } },
+      tooltip: { enabled: true },
+    },
+  });
+
+  const renderReportSummary = (items) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, margin: '14px 0 18px' }}>
+      {items.map(x => (
+        <div key={x.label} style={{ border: '1px solid #eee', background: '#fafafa', borderRadius: 10, padding: 10 }}>
+          <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>{x.label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{x.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+
 
   const reportCards = [
     // Individual report cards removed; using a single full PDF now
@@ -1349,35 +1154,269 @@ const ReportsView = () => {
 
   return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ fontSize: '1.5rem', margin: 0 }}>Report Generation</h3>
-        <button
-          onClick={downloadFullReport}
-          style={{
-            background: '#c0a062',
-            color: '#111827',
-            border: 'none',
-            padding: '10px 22px',
-            borderRadius: '999px',
-            fontWeight: 700,
-            fontSize: '0.78rem',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          Download Full PDF
-        </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={exportCustomerReport} style={{ background: '#c0a062', color: '#111827', border: 'none', padding: '10px 16px', borderRadius: '999px', fontWeight: 700, cursor: 'pointer' }}>Export Customer Report</button>
+            <button onClick={exportInventoryReport} style={{ background: '#c0a062', color: '#111827', border: 'none', padding: '10px 16px', borderRadius: '999px', fontWeight: 700, cursor: 'pointer' }}>Export Inventory Report</button>
+            <button onClick={exportOrderReport} style={{ background: '#c0a062', color: '#111827', border: 'none', padding: '10px 16px', borderRadius: '999px', fontWeight: 700, cursor: 'pointer' }}>Export Order Report</button>
+          </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '40px' }}>
-        {summaryStats.map(s => (
-          <div key={s.label} style={{ background: 'rgba(192,160,98,0.08)', border: '1px solid rgba(192,160,98,0.2)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px' }}>{s.label}</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#c0a062' }}>{s.value}</div>
+      <div style={{ marginBottom: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '18px', alignItems: 'start' }}>
+          {/* Left: report actions (charts are only rendered in the off-screen report container for export) */}
+          <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', minHeight: 120, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
+            <div style={{ fontSize: '1rem', fontWeight: 700 }}>Report Charts</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)' }}>Interactive charts are not shown here to keep the dashboard fast. Use the Export PDF button to generate reports that include charts and performance analytics.</div>
+            <div style={{ marginTop: 8 }} />
           </div>
-        ))}
+
+          {/* Right: summary cards */}
+          <div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {summaryStats.map(s => (
+                <div key={s.label} style={{ background: 'rgba(192,160,98,0.08)', border: '1px solid rgba(192,160,98,0.2)', borderRadius: '12px', padding: '12px' }}>
+                  <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px' }}>{s.label}</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#c0a062' }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Off-screen report-only containers (used for export). Keep them out of layout to avoid rendering cost in dashboard. */}
+      <div style={{ position: 'absolute', left: -4000, top: 0 }}>
+        {/* Customers Report */}
+        <div id="report-export-customers" style={{ width: 1040, padding: 28, background: '#fff', color: '#000' }}>
+          <h2 style={{ color: '#c0a062' }}>Customer Report</h2>
+          <div style={{ fontSize: 12, marginBottom: 8 }}>Includes: Customer ID, Name, Contact, Location, Orders, Amount spent, Last purchase</div>
+
+          {renderReportSummary([
+            { label: 'Total Customers', value: customers.length },
+            { label: 'Returning Customers', value: returningCustomersCount },
+            { label: 'Active (last 90 days)', value: activeCustomerIds.size },
+            { label: 'Avg Orders / Customer', value: customers.length > 0 ? (orders.length / customers.length).toFixed(2) : '0.00' },
+            { label: 'Total Revenue', value: `Rs. ${sumOrdersRevenue.toLocaleString()}` },
+            { label: 'Avg Order Value', value: `Rs. ${averageOrderValue.toFixed(2)}` },
+          ])}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ height: 320, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+              <Bar
+                options={exportBarOptions('New Customers per Month', 'Month', 'Customers')}
+                data={{
+                  labels: customerGrowthLabels,
+                  datasets: [{ label: 'New Customers', data: customerGrowthValues, backgroundColor: 'rgba(64,132,188,0.9)' }]
+                }}
+              />
+            </div>
+            <div style={{ height: 320, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+              <Pie
+                options={exportPieOptions('Customer Segments')}
+                data={{ labels: segmentLabels, datasets: [{ data: segmentValues, backgroundColor: ['#6b7280', '#3b82f6', '#10b981'] }] }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#f3f3f3' }}>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Customer ID</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Name</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Contact</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Location</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Registered</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Orders</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Amount Spent</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Last Purchase</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers.slice(0, 200).map(c => {
+                    const customerOrders = orders.filter(o => (o.CustomerID || o.CustomerName) === (c.CustomerID || c.Name));
+                    const total = customerOrders.reduce((s, x) => s + Number(x.TotalPrice || 0), 0);
+                    const last = customerOrders.sort((a,b)=> new Date(b.OrderDate) - new Date(a.OrderDate))[0];
+                    return (
+                      <tr key={c.CustomerID || c.Name}>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{c.CustomerID || c.Name}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{c.Name}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{c.ContactNo || c.Email || '—'}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{c.Address || '—'}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{c.RegistrationDate ? new Date(c.RegistrationDate).toLocaleDateString() : '—'}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{customerOrders.length}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>Rs. {total.toLocaleString()}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{last ? new Date(last.OrderDate).toLocaleDateString() : '—'}</td>
+                        <td style={{ padding: 6, border: '1px solid #eee' }}>{customerOrders.length > 5 ? 'Loyal' : (customerOrders.length === 0 ? 'New' : 'Active')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+          </div>
+        </div>
+
+        {/* Inventory Report */}
+        <div id="report-export-inventory" style={{ width: 1040, padding: 28, background: '#fff', color: '#000', marginTop: 20 }}>
+          <h2 style={{ color: '#c0a062' }}>Inventory Report</h2>
+          <div style={{ fontSize: 12, marginBottom: 8 }}>Includes: Inventory ID, Name, Available quantity, Minimum threshold, Last updated, Status</div>
+
+          {renderReportSummary([
+            { label: 'Total Items', value: inventory.length },
+            { label: 'Total Stock Qty', value: totalStockQty },
+            { label: 'Low Stock Items', value: lowStockCount },
+            { label: 'Latest Update', value: latestInventoryUpdate ? latestInventoryUpdate.toLocaleString() : '—' },
+            { label: 'Min Threshold Total', value: inventory.reduce((s, i) => s + Number(i.MinimumThreshold || 0), 0) },
+            { label: 'Stock Health', value: lowStockCount > 0 ? 'Attention Needed' : 'Good' },
+          ])}
+
+          {(() => {
+            const lowStockItems = inventory
+              .map(i => ({
+                ...i,
+                deficit: Number(i.MinimumThreshold || 0) - Number(i.AvailableQuantity || 0),
+              }))
+              .filter(i => i.deficit > 0)
+              .sort((a, b) => b.deficit - a.deficit);
+
+            const invChartItems = (lowStockItems.length > 0
+              ? lowStockItems
+              : [...inventory].sort((a, b) => Number(b.AvailableQuantity || 0) - Number(a.AvailableQuantity || 0))
+            ).slice(0, 10);
+
+            const inStockCount = inventory.length - lowStockCount;
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+                  <div style={{ height: 340, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+                    <Bar
+                      options={exportBarOptions(
+                        lowStockItems.length > 0 ? 'Low Stock Items (Available vs Threshold)' : 'Top Items by Stock (Available vs Threshold)',
+                        'Item',
+                        'Quantity',
+                        { indexAxis: 'y', scales: { x: { ticks: { precision: 0 } } } }
+                      )}
+                      data={{
+                        labels: invChartItems.map(i => truncateLabel(i.InventoryName, 22)),
+                        datasets: [
+                          { label: 'Available Qty', data: invChartItems.map(i => Number(i.AvailableQuantity || 0)), backgroundColor: 'rgba(16,185,129,0.85)' },
+                          { label: 'Min Threshold', data: invChartItems.map(i => Number(i.MinimumThreshold || 0)), backgroundColor: 'rgba(239,68,68,0.75)' }
+                        ]
+                      }}
+                    />
+                  </div>
+                  <div style={{ height: 340, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+                    <Pie
+                      options={exportPieOptions('Stock Status Distribution')}
+                      data={{
+                        labels: ['In Stock', 'Low Stock'],
+                        datasets: [{
+                          data: [Math.max(0, inStockCount), lowStockCount],
+                          backgroundColor: ['#10b981', '#ef4444'],
+                        }]}
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#f3f3f3' }}>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Inventory ID</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Name</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Available Qty</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Min Threshold</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Last Updated</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventory.map(i => (
+                    <tr key={i.InventoryID}>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.InventoryID}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.InventoryName}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.AvailableQuantity}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.MinimumThreshold}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.LastUpdated ? new Date(i.LastUpdated).toLocaleString() : '—'}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{i.AvailableQuantity <= i.MinimumThreshold ? 'Low Stock' : 'In Stock'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Orders Report */}
+        <div id="report-export-orders" style={{ width: 1040, padding: 28, background: '#fff', color: '#000', marginTop: 20 }}>
+          <h2 style={{ color: '#c0a062' }}>Order Report</h2>
+          <div style={{ fontSize: 12, marginBottom: 8 }}>Includes: Order ID, Customer, Date, Items, Quantity, Total price, Advance paid, Status</div>
+
+          {renderReportSummary([
+            { label: 'Total Orders', value: orders.length },
+            { label: 'Total Revenue', value: `Rs. ${sumOrdersRevenue.toLocaleString()}` },
+            { label: 'Avg Order Value', value: `Rs. ${averageOrderValue.toFixed(2)}` },
+            { label: 'Advance Paid', value: `Rs. ${sumAdvancePaid.toLocaleString()}` },
+            { label: 'Outstanding', value: `Rs. ${Math.max(0, sumOrdersRevenue - sumAdvancePaid).toLocaleString()}` },
+            { label: 'Completed Orders', value: completedOrders },
+          ])}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+            <div style={{ height: 320, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+              <Bar
+                options={exportBarOptions('Orders per Month', 'Month', 'Orders')}
+                data={{
+                  labels: ordersByMonthLabels,
+                  datasets: [{ label: 'Orders', data: ordersByMonthValues, backgroundColor: 'rgba(64,132,188,0.9)' }]
+                }}
+              />
+            </div>
+            <div style={{ height: 320, border: '1px solid #eee', borderRadius: 12, padding: 10 }}>
+              <Pie
+                options={exportPieOptions('Order Status Distribution')}
+                data={{ labels: orderStatusLabels, datasets: [{ data: orderStatusCounts, backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444'] }] }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#f3f3f3' }}>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Order ID</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Customer</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Date</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Items</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Qty</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Total</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Advance Paid</th>
+                    <th style={{ padding: 6, border: '1px solid #ddd' }}>Order Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.OrderID}>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.OrderID}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.CustomerName || o.CustomerID}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.OrderDate ? new Date(o.OrderDate).toLocaleDateString() : '—'}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.Items || '—'}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.TotalQuantity ?? '—'}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>Rs. {Number(o.TotalPrice||0).toLocaleString()}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>Rs. {Number(o.AdvancePaid||0).toLocaleString()}</td>
+                      <td style={{ padding: 6, border: '1px solid #eee' }}>{o.Status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+          </div>
+        </div>
       </div>
     </ContentCard>
   );
@@ -1446,7 +1485,7 @@ export default function AdminDashboard() {
               <Icons.Orders /> Orders
             </NavItem>
             <NavItem $active={activeTab === "Staff"} onClick={() => setActiveTab("Staff")}>
-              <Icons.Staff /> Staff Management
+              <Icons.Staff /> Staff
             </NavItem>
             <NavItem $active={activeTab === "Inventory"} onClick={() => setActiveTab("Inventory")}>
               <Icons.Inventory /> Inventory

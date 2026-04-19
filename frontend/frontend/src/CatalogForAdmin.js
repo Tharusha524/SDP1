@@ -6,9 +6,7 @@ import { FaEdit, FaSearch, FaBars, FaTimes, FaArrowLeft, FaTrash, FaSignOutAlt }
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
-import img4 from './assets/forgot-password-hero.png';
 import img5 from './assets/Gemini_Generated_Image_elt1ngelt1ngelt1.png';
-import img6 from './assets/Gemini_Generated_Image_q1wkmzq1wkmzq1wk.png';
 import img7 from './assets/Gemini_Generated_Image_qoa691qoa691qoa6.png';
 import img8 from './assets/register-hero.png';
 
@@ -334,17 +332,6 @@ const ButtonGroup = styled.div`
   gap: 10px;
   margin-top: auto;
 `;
-
-const PRODUCTS_DATA = [
-  { id: 'PRD-1001', title: "Flower Vase", price: "Rs.5500", desc: "Hand-blown glass with gold leaf detailing.", img: img1 },
-  { id: 'PRD-1002', title: "Flower vase", price: "Rs. 12,500", desc: "Velvet upholstery with solid oak legs.", img: img2 },
-  { id: 'PRD-1003', title: "Flower vase", price: "Rs. 28,000", desc: "Tempered smoked glass top.", img: img3 },
-  { id: 'PRD-1004', title: "Elegant Decor Piece", price: "Rs. 18,500", desc: "Modern ceramic design with matte finish.", img: img4 },
-  { id: 'PRD-1005', title: "Sofa set", price: "Rs. 22,000", desc: "Contemporary abstract art piece.", img: img5 },
-  { id: 'PRD-1006', title: "Table & Bench", price: "Rs. 15,750", desc: "Handcrafted with intricate patterns.", img: img6 },
-  { id: 'PRD-1007', title: "Large Flower Vase", price: "Rs. 32,500", desc: "Luxury decor for executive spaces.", img: img7 },
-  { id: 'PRD-1008', title: "Classic Ornament", price: "Rs. 19,900", desc: "Timeless design with elegant curves.", img: img8 },
-];
 
 const CatalogForAdmin = () => {
   const navigate = useNavigate();

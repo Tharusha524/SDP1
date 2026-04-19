@@ -6,9 +6,7 @@ import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt, FaUse
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
-import img4 from './assets/forgot-password-hero.png';
 import img5 from './assets/Gemini_Generated_Image_elt1ngelt1ngelt1.png';
-import img6 from './assets/Gemini_Generated_Image_q1wkmzq1wkmzq1wk.png';
 import img7 from './assets/Gemini_Generated_Image_qoa691qoa691qoa6.png';
 import img8 from './assets/register-hero.png';
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 const OrderReview = () => {
@@ -7,6 +7,7 @@ const OrderReview = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const attemptedFinalizeRef = useRef(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -16,14 +17,43 @@ const OrderReview = () => {
           navigate('/login');
           return;
         }
-        const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.success) {
+        const fetchOrderDetails = async () => {
+          const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json().catch(() => ({}));
+          return { res, data };
+        };
+
+        let { res, data } = await fetchOrderDetails();
+
+        // If the order isn't created yet (common when PayHere payment succeeded
+        // but the finalize call didn't run), attempt to finalize once and retry.
+        if (
+          !data?.success &&
+          !attemptedFinalizeRef.current &&
+          (res?.status === 404 || String(data?.error || '').toLowerCase().includes('not found'))
+        ) {
+          attemptedFinalizeRef.current = true;
+
+          await fetch('http://localhost:5000/api/payments/finalize', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ orderId })
+          }).then(r => r.json()).catch(() => ({}));
+
+          ({ res, data } = await fetchOrderDetails());
+        }
+
+        if (data?.success) {
           setOrder(data.order);
+          setError(null);
         } else {
-          setError(data.error || 'Failed to load order');
+          setOrder(null);
+          setError(data?.error || 'Failed to load order');
         }
       } catch (e) {
         setError('Network error. Please try again.');

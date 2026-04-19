@@ -18,5 +18,7 @@ router.post(
 // PayHere may redirect with GET (browser) or POST; support both.
 router.post('/payhere-return', paymentController.payhereReturn);
 router.get('/payhere-return', paymentController.payhereReturn);
+// Finalize order after successful PayHere return (called from frontend UI)
+router.post('/finalize', authenticateToken, authorizeRole('customer'), paymentController.finalizeOrder);
 
 module.exports = router;

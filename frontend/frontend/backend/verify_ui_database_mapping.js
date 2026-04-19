@@ -22,7 +22,7 @@ async function verifyUIDatabaseMapping() {
     
     console.log('🗄️  DATABASE TABLES:');
     console.log('   orders: OrderID, CustomerID, Status, OrderDate, Address');
-    console.log('   orderitem: OrderItemID, OrderID, ProductID, Quantity, Price');
+    console.log('   orderitem: OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase');
     console.log('   customer: CustomerID, Name, Email, ContactNo');
     console.log('   product: ProductID, Name, Price, Description\n');
     
@@ -34,7 +34,7 @@ async function verifyUIDatabaseMapping() {
         c.Email as CustomerEmail,
         GROUP_CONCAT(CONCAT(p.Name, ' (x', oi.Quantity, ')') SEPARATOR ', ') as Items,
         SUM(oi.Quantity) as TotalQuantity,
-        SUM(oi.Quantity * oi.Price) as TotalPrice,
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice,
         o.Status,
         o.OrderDate
       FROM orders o
@@ -72,7 +72,7 @@ async function verifyUIDatabaseMapping() {
         o.OrderID,
         o.OrderDate,
         GROUP_CONCAT(p.Name SEPARATOR ', ') as Items,
-        SUM(oi.Quantity * oi.Price) as TotalPrice,
+        SUM(oi.Quantity * oi.UnitPriceAtPurchase) as TotalPrice,
         o.Status
       FROM orders o
       LEFT JOIN orderitem oi ON o.OrderID = oi.OrderID
@@ -300,7 +300,7 @@ async function verifyUIDatabaseMapping() {
     console.log('📝 Recommended Queries for Frontend:\n');
     console.log('1. Get Orders with Customer & Items:');
     console.log('   SELECT o.OrderID, c.Name, GROUP_CONCAT(p.Name) as Items,');
-    console.log('          SUM(oi.Quantity) as Quantity, SUM(oi.Quantity * oi.Price) as Total,');
+    console.log('          SUM(oi.Quantity) as Quantity, SUM(oi.Quantity * oi.UnitPriceAtPurchase) as Total,');
     console.log('          o.Status');
     console.log('   FROM orders o');
     console.log('   JOIN customer c ON o.CustomerID = c.CustomerID');

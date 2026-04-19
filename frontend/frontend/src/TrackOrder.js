@@ -281,22 +281,27 @@ const TrackOrder = () => {
   const [trackError, setTrackError] = useState(null);
   const [searching, setSearching] = useState(false);
 
-  // Load customer's own orders as notifications on mount
+  // Load notifications for the logged-in user (uses notification.DateTime as created timestamp)
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    fetch('http://localhost:5000/api/orders/my', {
+    fetch('http://localhost:5000/api/notifications', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(r => r.json())
       .then(data => {
-        if (data.success) {
-          setNotifications(data.orders.map(o => ({
-            id: o.OrderID,
-            orderId: o.OrderID,
-            status: `${o.Status}${o.Items ? ' — ' + o.Items : ''}`,
-            time: new Date(o.OrderDate || o.CreatedAt).toLocaleString()
-          })));
+        if (data && data.success && Array.isArray(data.notifications)) {
+          setNotifications(
+            data.notifications
+              .slice(0, 50)
+              .map(n => ({
+                id: n.NotificationID,
+                orderId: n.RelatedID,
+                message: n.Message,
+                type: n.Type,
+                time: n.DateTime ? new Date(n.DateTime).toLocaleString() : ''
+              }))
+          );
         }
       })
       .catch(() => {});
@@ -319,7 +324,7 @@ const TrackOrder = () => {
         setTrackedOrder({
           id: o.OrderID,
           status: o.Status,
-          time: new Date(o.OrderDate || o.CreatedAt).toLocaleString(),
+          time: new Date(o.StatusUpdatedAt || o.UpdatedAt || o.OrderDate || o.CreatedAt).toLocaleString(),
           items: o.Items,
           estimated: o.EstimatedCompletionDate
             ? new Date(o.EstimatedCompletionDate).toLocaleDateString()
@@ -388,7 +393,15 @@ const TrackOrder = () => {
                       <NotifItem>
                         <FaInfoCircle style={{ color: '#c0a062', marginTop: '2px' }} />
                         <NotifContent>
-                          <NotifMsg><b>Order #{n.orderId}</b>: {n.status}</NotifMsg>
+                          <NotifMsg>
+                            {n.orderId ? (
+                              <>
+                                <b>Order #{n.orderId}</b>: {n.message}
+                              </>
+                            ) : (
+                              <>{n.message}</>
+                            )}
+                          </NotifMsg>
                           <NotifTime>{n.time}</NotifTime>
                         </NotifContent>
                       </NotifItem>

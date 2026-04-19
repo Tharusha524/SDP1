@@ -96,22 +96,6 @@ const Divider = styled.div`
   background: radial-gradient(circle at left, rgba(148, 163, 184, 0.7), transparent);
 `;
 
-const FakeCardRow = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`;
-
-const InputRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
-  margin-top: 8px;
-
-  @media (max-width: 480px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-`;
 
 const HelperText = styled.div`
   margin-top: 8px;
@@ -119,61 +103,8 @@ const HelperText = styled.div`
   color: rgba(148, 163, 184, 0.9);
 `;
 
-const CardTypeRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-`;
 
-const CardTypeButton = styled.button`
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? "rgba(192, 160, 98, 0.95)" : "rgba(75, 85, 99, 0.9)"};
-  background: ${({ $active }) =>
-    $active ? "rgba(192, 160, 98, 0.16)" : "rgba(15, 23, 42, 0.95)"};
-  color: #e5e7eb;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.08s ease;
 
-  &:hover {
-    transform: translateY(-1px);
-    border-color: rgba(209, 213, 219, 0.9);
-  }
-`;
-
-const TextInput = styled.input`
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(75, 85, 99, 0.9);
-  background: rgba(15, 23, 42, 0.95);
-  font-size: 0.86rem;
-  color: #e5e7eb;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-
-  &::placeholder {
-    color: rgba(148, 163, 184, 0.85);
-  }
-
-  &:focus {
-    border-color: #c0a062;
-    box-shadow: 0 0 0 1px rgba(192, 160, 98, 0.6);
-    background: rgba(15, 23, 42, 0.98);
-  }
-`;
-
-const FieldError = styled.div`
-  margin-top: 4px;
-  font-size: 0.75rem;
-  color: #fecaca;
-`;
 
 const ActionsRow = styled.div`
   margin-top: 22px;
@@ -250,11 +181,6 @@ function PaymentCheckout() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [cardType, setCardType] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
 
   const {
     productId,
@@ -278,82 +204,14 @@ function PaymentCheckout() {
     navigate("/customer/place-order");
   };
 
-  const luhnCheck = (num) => {
-    let sum = 0;
-    let shouldDouble = false;
+  
 
-    for (let i = num.length - 1; i >= 0; i -= 1) {
-      let digit = parseInt(num[i], 10);
-      if (Number.isNaN(digit)) return false;
-      if (shouldDouble) {
-        digit *= 2;
-        if (digit > 9) digit -= 9;
-      }
-      sum += digit;
-      shouldDouble = !shouldDouble;
-    }
-
-    return sum % 10 === 0;
-  };
-
-  const validateCardFields = () => {
-    const errors = {};
-
-    if (!cardType) {
-      errors.cardType = "Select a card type.";
-    }
-
-    const digits = cardNumber.replace(/\s+/g, "");
-    if (!digits) {
-      errors.cardNumber = "Enter your card number.";
-    } else if (!/^\d{13,19}$/.test(digits)) {
-      errors.cardNumber = "Card number must be 13-19 digits.";
-    } else {
-      if (cardType === "visa" && !digits.startsWith("4")) {
-        errors.cardNumber = "Visa numbers must start with 4.";
-      }
-      if (cardType === "mastercard" && !/^5[1-5]/.test(digits)) {
-        errors.cardNumber = "MasterCard numbers usually start with 51-55.";
-      }
-      if (!errors.cardNumber && !luhnCheck(digits)) {
-        errors.cardNumber = "Card number is invalid.";
-      }
-    }
-
-    if (!expiry) {
-      errors.expiry = "Enter expiry date.";
-    } else if (!/^\d{2}\/\d{2}$/.test(expiry)) {
-      errors.expiry = "Use MM/YY format.";
-    } else {
-      const [mmStr, yyStr] = expiry.split("/");
-      const month = parseInt(mmStr, 10);
-      const year = 2000 + parseInt(yyStr, 10);
-      if (Number.isNaN(month) || month < 1 || month > 12) {
-        errors.expiry = "Invalid month.";
-      } else {
-        const now = new Date();
-        const expDate = new Date(year, month, 1);
-        const ref = new Date(now.getFullYear(), now.getMonth(), 1);
-        if (expDate <= ref) {
-          errors.expiry = "Card is expired.";
-        }
-      }
-    }
-
-    if (!cvv) {
-      errors.cvv = "Enter CVV.";
-    } else if (!/^\d{3}$/.test(cvv)) {
-      errors.cvv = "CVV must be 3 digits.";
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handlePay = async () => {
+  const handlePayHere = async () => {
     setError(null);
-    const validationPassed = validateCardFields();
-    if (!validationPassed) return;
+    if (!hasState) {
+      setError("Payment session has expired. Please start again.");
+      return;
+    }
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -361,48 +219,50 @@ function PaymentCheckout() {
       return;
     }
 
-    if (!productId || !quantity || !advanceAmount || !totalPrice) {
-      setError("Payment session has expired. Please start again.");
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const response = await fetch("http://localhost:5000/api/payments/card-direct", {
+      const resp = await fetch("http://localhost:5000/api/payments/payhere-init", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          productId,
-          quantity,
-          details
-        })
+        body: JSON.stringify({ productId, quantity, details }),
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setError(
-          data.error || "Could not complete payment. Please try again in a moment."
-        );
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        setError(data.error || "Could not initiate PayHere payment.");
         setSubmitting(false);
         return;
       }
 
-      const orderId = data.orderId;
-      if (!orderId) {
-        setError("Payment completed, but order reference was missing.");
+      const { payhereUrl, params } = data;
+      if (!payhereUrl || !params) {
+        setError("PayHere response missing required data.");
         setSubmitting(false);
         return;
       }
 
-      navigate(`/payment-success?orderId=${encodeURIComponent(orderId)}`, {
-        state: {},
+      // Build and submit form to PayHere (POST)
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = payhereUrl;
+      form.style.display = "none";
+
+      Object.keys(params).forEach((k) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = k;
+        input.value = params[k];
+        form.appendChild(input);
       });
+
+      document.body.appendChild(form);
+      form.submit();
     } catch (e) {
-      console.error("Error completing payment:", e);
-      setError("Network error. Please check your connection and try again.");
+      console.error("PayHere init error:", e);
+      setError("Network error. Could not start PayHere.");
       setSubmitting(false);
     }
   };
@@ -477,99 +337,17 @@ function PaymentCheckout() {
 
             <Divider />
 
-            <FakeCardRow>
-              <Label>Card Type</Label>
-              <CardTypeRow>
-                <CardTypeButton
-                  type="button"
-                  $active={cardType === "visa"}
-                  onClick={() => setCardType("visa")}
-                >
-                  Visa
-                </CardTypeButton>
-                <CardTypeButton
-                  type="button"
-                  $active={cardType === "mastercard"}
-                  onClick={() => setCardType("mastercard")}
-                >
-                  MasterCard
-                </CardTypeButton>
-                <CardTypeButton
-                  type="button"
-                  $active={cardType === "amex"}
-                  onClick={() => setCardType("amex")}
-                >
-                  Amex
-                </CardTypeButton>
-              </CardTypeRow>
-              {fieldErrors.cardType && <FieldError>{fieldErrors.cardType}</FieldError>}
-
-              <Label style={{ marginTop: "12px" }}>Card Number</Label>
-              <TextInput
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="XXXX XXXX XXXX XXXX"
-                value={cardNumber}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/[^0-9]/g, "");
-                  const groups = raw.match(/.{1,4}/g) || [];
-                  setCardNumber(groups.join(" "));
-                }}
-              />
-              {fieldErrors.cardNumber && (
-                <FieldError>{fieldErrors.cardNumber}</FieldError>
-              )}
-
-              <InputRow>
-                <div>
-                  <Label>Expiry (MM/YY)</Label>
-                  <TextInput
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="MM/YY"
-                    value={expiry}
-                    onChange={(e) => {
-                      let v = e.target.value.replace(/[^0-9]/g, "");
-                      if (v.length > 4) v = v.slice(0, 4);
-                      if (v.length > 2) {
-                        v = `${v.slice(0, 2)}/${v.slice(2)}`;
-                      }
-                      setExpiry(v);
-                    }}
-                  />
-                  {fieldErrors.expiry && (
-                    <FieldError>{fieldErrors.expiry}</FieldError>
-                  )}
-                </div>
-                <div>
-                  <Label>CVV</Label>
-                  <TextInput
-                    type="password"
-                    inputMode="numeric"
-                    placeholder="3 digits"
-                    value={cvv}
-                    onChange={(e) => {
-                      let v = e.target.value.replace(/[^0-9]/g, "");
-                      if (v.length > 3) v = v.slice(0, 3);
-                      setCvv(v);
-                    }}
-                  />
-                  {fieldErrors.cvv && <FieldError>{fieldErrors.cvv}</FieldError>}
-                </div>
-              </InputRow>
-              <HelperText>
-                We validate your card here and complete the payment directly
-                in this system without leaving the site.
-              </HelperText>
-            </FakeCardRow>
+            <HelperText>
+              You will be redirected to the PayHere sandbox to complete the
+              40% advance payment securely.
+            </HelperText>
 
             {error && <ErrorBox>{error}</ErrorBox>}
 
             <ActionsRow>
-              <PrimaryButton onClick={handlePay} disabled={submitting}>
+              <PrimaryButton onClick={handlePayHere} disabled={submitting}>
                 <FaLock size={12} />
-                {submitting ? "Processing..." : "Pay Securely"}
+                {submitting ? "Processing..." : "Proceed to PayHere"}
               </PrimaryButton>
               <SecondaryButton onClick={handleBack} disabled={submitting}>
                 <FaArrowLeft size={12} /> Back to Order
