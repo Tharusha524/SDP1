@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion } from 'framer-motion';
-import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaHashtag, FaArrowLeft } from 'react-icons/fa';
+import { FaShoppingBag, FaUser, FaListUl, FaLayerGroup, FaArrowLeft } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const MAX_ORDER_QUANTITY = 50;
@@ -120,6 +120,46 @@ const Input = styled.input`
   }
 `;
 
+const Select = styled.select`
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 15px;
+  color: #fff;
+  border-radius: 12px;
+  font-family: inherit;
+  transition: all 0.3s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #c0a062;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  option {
+    color: #111827;
+  }
+`;
+
+const RowActions = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+`;
+
+const SmallButton = styled.button`
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.78rem;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+`;
+
 const PriceBox = styled.div`
   background: rgba(192, 160, 98, 0.08);
   padding: 25px;
@@ -175,11 +215,13 @@ const PlaceOrder = () => {
   const preselected = (location && location.state) || {};
 
   const [products, setProducts] = useState([]);
-  const [formData, setFormData] = useState({
-    product: preselected.productId || '',
-    details: preselected.productDesc || '',
-    quantity: 1
-  });
+  const [orderItems, setOrderItems] = useState([
+    {
+      productId: preselected.productId || '',
+      quantity: 1
+    }
+  ]);
+  const [details, setDetails] = useState(preselected.productDesc || '');
   const [totalPrice, setTotalPrice] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -200,71 +242,93 @@ const PlaceOrder = () => {
       .catch(() => {});
   }, []);
 
-  // Recalculate price from product price (DB first, then numeric price from catalog state)
+  // Recalculate total from all selected product items.
   useEffect(() => {
-    if (formData.quantity <= 0) {
-      setTotalPrice(0);
-      return;
-    }
+    let total = 0;
 
-    let unitPrice = 0;
+    orderItems.forEach((item, index) => {
+      if (!item.productId || !item.quantity || item.quantity <= 0) return;
 
-    // Prefer real price from DB when productId is known
-    if (formData.product && products && products.length > 0) {
-      const found = products.find(p => p.ProductID === formData.product);
+      let unitPrice = 0;
+      const found = products.find(p => p.ProductID === item.productId);
       if (found && found.Price != null) {
         unitPrice = Number(found.Price) || 0;
       }
-    }
 
-    // Fallback: use numeric price passed from catalog (unitPrice), then productPrice
-    if (!unitPrice) {
-      const fallbackPrice = preselected.unitPrice ?? preselected.productPrice;
-      if (typeof fallbackPrice === 'number') {
-        unitPrice = fallbackPrice;
-      } else if (typeof fallbackPrice === 'string') {
-        const numeric = fallbackPrice.replace(/[^0-9.]/g, '');
-        unitPrice = Number(numeric) || 0;
+      // Price fallback for the first pre-selected item from catalog navigation.
+      if (!unitPrice && index === 0 && item.productId === preselected.productId) {
+        const fallbackPrice = preselected.unitPrice ?? preselected.productPrice;
+        if (typeof fallbackPrice === 'number') {
+          unitPrice = fallbackPrice;
+        } else if (typeof fallbackPrice === 'string') {
+          const numeric = fallbackPrice.replace(/[^0-9.]/g, '');
+          unitPrice = Number(numeric) || 0;
+        }
       }
-    }
 
-    setTotalPrice(unitPrice > 0 ? unitPrice * formData.quantity : 0);
-  }, [formData.product, formData.quantity, products, preselected.unitPrice, preselected.productPrice]);
+      total += unitPrice * item.quantity;
+    });
 
-  const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [id]: id === 'quantity' ? parseInt(value) || 0 : value
-    }));
+    setTotalPrice(total);
+  }, [orderItems, products, preselected.productId, preselected.unitPrice, preselected.productPrice]);
+
+  const handleItemChange = (index, field, value) => {
+    setOrderItems((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: field === 'quantity' ? (parseInt(value, 10) || 0) : value
+      };
+      return next;
+    });
   };
 
-  const selectedProductName = (() => {
-    if (preselected.productName) return preselected.productName;
-    const found = products.find(p => p.ProductID === formData.product);
-    return found ? found.Name : '';
-  })();
+  const addItemRow = () => {
+    setOrderItems((prev) => [...prev, { productId: '', quantity: 1 }]);
+  };
+
+  const removeItemRow = (index) => {
+    setOrderItems((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError(null);
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
-    if (formData.quantity > MAX_ORDER_QUANTITY) {
-      setError(`Quantity cannot exceed ${MAX_ORDER_QUANTITY}.`);
+
+    if (!orderItems.length) {
+      setError('Add at least one product item.');
       return;
     }
-    if (totalPrice <= 0 || !formData.product) {
-      setError('Please select a product and valid quantity before paying the advance.');
+
+    const invalidItem = orderItems.find((item) => (
+      !item.productId || !item.quantity || item.quantity <= 0 || item.quantity > MAX_ORDER_QUANTITY
+    ));
+
+    if (invalidItem) {
+      setError(`Each item must have a product and quantity between 1 and ${MAX_ORDER_QUANTITY}.`);
       return;
     }
+
+    if (totalPrice <= 0) {
+      setError('Please select valid products and quantities before paying the advance.');
+      return;
+    }
+
+    const displayNames = orderItems
+      .map((item) => products.find((p) => p.ProductID === item.productId)?.Name)
+      .filter(Boolean);
+
     setSubmitting(true);
     navigate('/customer/payment', {
       state: {
-        productId: formData.product,
-        quantity: formData.quantity,
-        details: formData.details,
-        productName: selectedProductName,
+        items: orderItems,
+        details,
+        productName: displayNames.length ? displayNames.join(', ') : (preselected.productName || ''),
         totalPrice,
         advanceAmount,
         remainingAmount
@@ -320,14 +384,38 @@ const PlaceOrder = () => {
             </FormGroup>
 
             <FormGroup>
-              <Label htmlFor="productname"><FaListUl size={12} /> Product Name</Label>
-              <Input
-                id="productname"
-                type="text"
-                value={selectedProductName}
-                readOnly
-                style={{ opacity: 0.85, cursor: 'not-allowed' }}
-              />
+              <Label><FaListUl size={12} /> Products</Label>
+              {orderItems.map((item, index) => (
+                <div key={`order-item-${index}`} style={{ display: 'grid', gap: '10px', marginBottom: '12px' }}>
+                  <Select
+                    value={item.productId}
+                    onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
+                    required
+                  >
+                    <option value="">Select product</option>
+                    {products.map((product) => (
+                      <option key={product.ProductID} value={product.ProductID}>
+                        {product.Name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder="Quantity"
+                    min="1"
+                    max={MAX_ORDER_QUANTITY}
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                    required
+                  />
+                  <SmallButton type="button" onClick={() => removeItemRow(index)} disabled={orderItems.length <= 1}>
+                    Remove Item
+                  </SmallButton>
+                </div>
+              ))}
+              <RowActions>
+                <SmallButton type="button" onClick={addItemRow}>+ Add Another Product</SmallButton>
+              </RowActions>
             </FormGroup>
 
             <FormGroup>
@@ -336,25 +424,11 @@ const PlaceOrder = () => {
                 type="text"
                 id="details"
                 placeholder="e.g. custom finish, special notes, etc."
-                value={formData.details}
-                onChange={handleInputChange}
-              />
-            </FormGroup>
-
-            <FormGroup>
-              <Label htmlFor="quantity"><FaHashtag size={12} /> Quantity</Label>
-              <Input
-                type="number"
-                id="quantity"
-                placeholder="Enter quantity"
-                min="1"
-                max={MAX_ORDER_QUANTITY}
-                value={formData.quantity}
-                onChange={handleInputChange}
-                required
+                value={details}
+                onChange={(e) => setDetails(e.target.value)}
               />
               <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)' }}>
-                Maximum quantity per order: {MAX_ORDER_QUANTITY}
+                Maximum quantity per item: {MAX_ORDER_QUANTITY}
               </div>
             </FormGroup>
 

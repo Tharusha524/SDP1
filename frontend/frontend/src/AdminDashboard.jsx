@@ -6,7 +6,7 @@ import HandleInventory from "./HandleInventory.js";
 import CatalogManage from "./CatalogManage.js";
 import jsPDF from 'jspdf';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement } from 'chart.js';
-import { Pie, Bar, Line } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 import html2canvas from 'html2canvas';
 
 ChartJS.register(ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement);
@@ -620,7 +620,20 @@ const InventoryView = () => {
 
   const fmtDate = (d) => {
     if (!d) return '—';
-    try { return new Date(d).toISOString().split('T')[0]; } catch { return '—'; }
+    try {
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return '—';
+      return dt.toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch {
+      return '—';
+    }
   };
 
   return (
@@ -682,15 +695,15 @@ const AllocateTaskView = () => {
   }, []);
 
   const handleAssign = () => {
-    if (!form.staffId || !form.description.trim()) {
-      setSubmitMsg('Please select a staff member and enter a description.');
+    if (!form.staffId || !form.description.trim() || !form.orderId || !form.orderId.trim()) {
+      setSubmitMsg('Please select a staff member, enter a description, and provide a related order ID.');
       return;
     }
     setSubmitting(true);
     fetch(`${API_BASE}/api/admin/tasks`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ staffId: form.staffId, description: form.description.trim(), orderId: form.orderId || null })
+      body: JSON.stringify({ staffId: form.staffId, description: form.description.trim(), orderId: form.orderId.trim() })
     })
       .then(r => r.json())
       .then(data => {
@@ -699,7 +712,16 @@ const AllocateTaskView = () => {
           setForm(prev => ({ ...prev, description: '', orderId: '' }));
           loadTasks();
         } else {
-          setSubmitMsg(data.error || 'Failed to assign task');
+          const rawErr = (data && data.error != null) ? String(data.error) : '';
+          const looksLikeInvalidOrderId =
+            /foreign key constraint fails/i.test(rawErr) ||
+            /ER_NO_REFERENCED_ROW_2/i.test(rawErr) ||
+            /task_ibfk_\d+/i.test(rawErr);
+          if (looksLikeInvalidOrderId) {
+            setSubmitMsg('Invalid OrderID');
+          } else {
+            setSubmitMsg(rawErr || 'Failed to assign task');
+          }
         }
       })
       .catch(() => setSubmitMsg('Could not connect to server'))
@@ -732,12 +754,13 @@ const AllocateTaskView = () => {
           />
         </div>
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Related Order ID (optional)</label>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Related Order ID</label>
           <input
             type="text"
             value={form.orderId}
+            required
             onChange={(e) => setForm(prev => ({ ...prev, orderId: e.target.value }))}
-            placeholder="e.g., OR-0001"
+            placeholder="e.g., ORD-0001"
             style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', outline: 'none' }}
           />
         </div>
@@ -860,6 +883,7 @@ const ReportsView = () => {
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [inventoryUsage, setInventoryUsage] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -869,31 +893,15 @@ const ReportsView = () => {
       fetch(`${API_BASE}/api/admin/reports/orders`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/inventory`, { headers }).then(r => r.json()),
       fetch(`${API_BASE}/api/admin/tasks`, { headers }).then(r => r.json()),
-    ]).then(([ord, inv, tsk]) => {
-      if (ord.success) setOrders(ord.orders);
-      if (inv.success) setInventory(inv.inventory);
-      if (tsk.success) setTasks(tsk.tasks);
+      fetch(`${API_BASE}/api/admin/reports/inventory-usage`, { headers }).then(r => r.json()),
+    ]).then(([ord, inv, tsk, usage]) => {
+      if (ord && ord.success) setOrders(ord.orders);
+      if (inv && inv.success) setInventory(inv.inventory);
+      if (tsk && tsk.success) setTasks(tsk.tasks);
+      if (usage && usage.success) setInventoryUsage(Array.isArray(usage.usage) ? usage.usage : []);
     }).catch(() => setError('Failed to load report data.'))
       .finally(() => setLoading(false));
   }, []);
-
-  const parseOrderItems = (itemsText) => {
-    const map = new Map();
-    if (!itemsText) return map;
-
-    String(itemsText).split(',').forEach(raw => {
-      const part = raw.trim();
-      if (!part) return;
-
-      const match = part.match(/(.+)\sx(\d+)/i);
-      const name = (match ? match[1] : part).trim();
-      const qty = match ? parseInt(match[2], 10) || 1 : 1;
-
-      map.set(name, (map.get(name) || 0) + qty);
-    });
-
-    return map;
-  };
 
   // New: fetch customers and provide separate exports for Customer/Inventory/Order reports
   const [customers, setCustomers] = useState([]);
@@ -1323,6 +1331,31 @@ const ReportsView = () => {
                   </div>
                 </div>
 
+                <div style={{ height: 320, border: '1px solid #eee', borderRadius: 12, padding: 10, marginBottom: 18 }}>
+                  <Bar
+                    options={exportBarOptions(
+                      'Inventory Used in Completed Orders (Allocated Qty)',
+                      'Material',
+                      'Used Quantity',
+                      { scales: { y: { ticks: { precision: 0 } } } }
+                    )}
+                    data={{
+                      labels: (inventoryUsage && inventoryUsage.length > 0)
+                        ? inventoryUsage.map(r => truncateLabel(r.InventoryName || r.InventoryID, 22))
+                        : ['No data'],
+                      datasets: [
+                        {
+                          label: 'Used Qty',
+                          data: (inventoryUsage && inventoryUsage.length > 0)
+                            ? inventoryUsage.map(r => Number(r.UsedQuantity || 0))
+                            : [0],
+                          backgroundColor: 'rgba(64,132,188,0.9)'
+                        }
+                      ]
+                    }}
+                  />
+                </div>
+
                 <div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
@@ -1431,6 +1464,7 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('cart');
     navigate('/catalog');
   };
 

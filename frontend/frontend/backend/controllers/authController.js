@@ -409,6 +409,15 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
     }
 
+    // Validate new password complexity server-side
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    }
+    const complexity = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/;
+    if (!complexity.test(newPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must include uppercase, lowercase, number and special characters (!@#$%^&*)' });
+    }
+
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
 

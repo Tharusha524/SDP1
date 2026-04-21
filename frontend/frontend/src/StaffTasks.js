@@ -319,6 +319,7 @@ export default function StaffTasks() {
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('cart');
     navigate('/catalog');
   };
 

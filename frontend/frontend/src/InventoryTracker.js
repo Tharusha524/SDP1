@@ -209,6 +209,7 @@ const InventoryTracker = () => {
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
+        localStorage.removeItem('cart');
         navigate('/catalog');
     };
 
@@ -232,10 +233,11 @@ const InventoryTracker = () => {
                         stock: i.AvailableQuantity,
                         threshold: i.MinimumThreshold,
                         alertTime: i.LastUpdated ? new Date(i.LastUpdated).toLocaleString() : 'N/A',
-                        update: ''
+                        update: '',
+                        updateError: ''
                     }));
                     setMaterials(mapped);
-                    if (mapped.some(m => m.stock <= m.threshold)) setShowLowStockMsg(true);
+                    setShowLowStockMsg(mapped.some(m => Number(m.stock) <= Number(m.threshold)));
                 }
             })
             .catch(() => {})
@@ -244,24 +246,78 @@ const InventoryTracker = () => {
     }, []);
 
     const handleInputChange = (id, value) => {
-        setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: value } : m));
+        // empty -> clear error
+        if (value === '') {
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: '', updateError: '' } : m));
+            return;
+        }
+
+        // allow only digits and optional leading '-', otherwise show formatting error
+        if (/^-?\d*$/.test(String(value)) === false) {
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: value, updateError: 'Please enter a valid number' } : m));
+            return;
+        }
+
+        const parsed = parseInt(value, 10);
+        if (isNaN(parsed)) {
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: value, updateError: '' } : m));
+            return;
+        }
+
+        // negative -> show explicit row error and keep typed value visible
+        if (parsed < 0 || String(value).startsWith('-')) {
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: value, updateError: "Can't add the negative value" } : m));
+            return;
+        }
+
+        // valid non-negative integer
+        setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: String(parsed), updateError: '' } : m));
     };
 
     const updateStock = async () => {
-        const itemsToUpdate = materials.filter(m => m.update !== '' && !isNaN(parseInt(m.update)));
+        const itemsToUpdate = materials
+            .filter(m => m.update !== '' && !isNaN(parseInt(m.update, 10)))
+            .map(m => ({ ...m, parsed: parseInt(m.update, 10) }));
+
         if (itemsToUpdate.length === 0) {
             setToast({ show: true, msg: 'Enter a quantity in at least one row to update.' });
             setTimeout(() => setToast({ show: false, msg: '' }), 4000);
             return;
         }
+
+        // Defensive: reject negative values
+        const negative = itemsToUpdate.find(m => m.parsed < 0);
+        if (negative) {
+            setToast({ show: true, msg: 'Negative quantities are not allowed.' });
+            setTimeout(() => setToast({ show: false, msg: '' }), 4000);
+            return;
+        }
+
         try {
-            await Promise.all(itemsToUpdate.map(m =>
+            const responses = await Promise.all(itemsToUpdate.map(m =>
                 fetch(`http://localhost:5000/api/inventory/${m.id}`, {
                     method: 'PATCH',
                     headers: authHeader,
-                    body: JSON.stringify({ quantity: parseInt(m.update) })
+                    body: JSON.stringify({ quantity: m.parsed })
                 })
             ));
+
+            const failed = [];
+            for (let i = 0; i < responses.length; i++) {
+                const res = responses[i];
+                if (!res.ok) {
+                    let errMsg = 'Failed to update';
+                    try { const j = await res.json(); if (j && j.error) errMsg = j.error; } catch (e) {}
+                    failed.push({ id: itemsToUpdate[i].id, error: errMsg });
+                }
+            }
+
+            if (failed.length > 0) {
+                setToast({ show: true, msg: `Update failed for ${failed.length} item(s).` });
+                setTimeout(() => setToast({ show: false, msg: '' }), 5000);
+                return;
+            }
+
             // Refresh from DB
             const res = await fetch('http://localhost:5000/api/inventory', { headers: authHeader });
             const data = await res.json();
@@ -275,18 +331,18 @@ const InventoryTracker = () => {
                     update: ''
                 }));
                 setMaterials(mapped);
-                const lowFound = mapped.some(m => m.stock <= m.threshold);
-                if (lowFound) {
-                    setShowLowStockMsg(true);
-                    setTimeout(() => setShowLowStockMsg(false), 5000);
-                }
+                const lowFound = mapped.some(m => Number(m.stock) <= Number(m.threshold));
+                setShowLowStockMsg(lowFound);
             }
             setToast({ show: true, msg: 'Inventory updated successfully.' });
-        } catch {
+        } catch (err) {
             setToast({ show: true, msg: 'Network error. Please try again.' });
         }
         setTimeout(() => setToast({ show: false, msg: '' }), 4000);
     };
+
+    const hasValidUpdate = materials.some(m => m.update !== '' && !isNaN(parseInt(m.update, 10)) && parseInt(m.update, 10) >= 0 && !m.updateError);
+    const hasInvalidUpdate = materials.some(m => m.updateError && m.updateError.length > 0);
 
     return (
         <>
@@ -363,10 +419,16 @@ const InventoryTracker = () => {
                                     <td>
                                         <Input
                                             type="number"
+                                            min="0"
                                             placeholder="Set qty..."
                                             value={mat.update}
                                             onChange={(e) => handleInputChange(mat.id, e.target.value)}
                                         />
+                                        {mat.updateError && (
+                                            <div style={{ color: '#ff6b6b', fontSize: '0.85rem', marginTop: '8px' }}>
+                                                {mat.updateError}
+                                            </div>
+                                        )}
                                     </td>
                                 </motion.tr>
                             ))}
@@ -378,6 +440,8 @@ const InventoryTracker = () => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={updateStock}
+                    disabled={!hasValidUpdate || hasInvalidUpdate}
+                    style={{ opacity: !hasValidUpdate || hasInvalidUpdate ? 0.6 : 1, cursor: !hasValidUpdate || hasInvalidUpdate ? 'not-allowed' : 'pointer' }}
                 >
                     Update Inventory & Send Alert <FaChartLine />
                 </UpdateButton>

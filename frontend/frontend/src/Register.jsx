@@ -324,7 +324,7 @@ const Register = () => {
         if (!value.trim()) {
           errorMsg = 'Full name is required';
         } else if (value.trim().length < 3) {
-          errorMsg = 'Name must be at least 3 characters';
+          errorMsg = 'Name must be at least 5 characters';
         }
         break;
 
@@ -349,8 +349,8 @@ const Register = () => {
           errorMsg = 'Password is required';
         } else if (value.length < 8) {
           errorMsg = 'Password must be at least 8 characters';
-        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) {
-          errorMsg = 'Password must include uppercase, lowercase, and number';
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/.test(value)) {
+          errorMsg = 'Password must include uppercase, lowercase, number and special characters (!@#$%^&*)';
         }
         break;
 

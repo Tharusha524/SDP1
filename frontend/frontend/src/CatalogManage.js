@@ -349,8 +349,28 @@ export default function CatalogManage() {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.price) {
-      alert('Name and price are required!');
+    const cleanName = String(formData.name || '').trim();
+    const cleanDescription = String(formData.description || '').trim();
+    const numericPrice = Number(formData.price);
+    const cleanImage = String(formData.image || '').trim();
+
+    if (!cleanName || !cleanDescription) {
+      alert('Product name and description are required.');
+      return;
+    }
+
+    if (!cleanImage) {
+      alert('Product image is required.');
+      return;
+    }
+
+    if (!Number.isFinite(numericPrice)) {
+      alert('Please enter a valid price.');
+      return;
+    }
+
+    if (numericPrice < 1000) {
+      alert('Price must be at least Rs. 1000.00');
       return;
     }
 
@@ -364,10 +384,10 @@ export default function CatalogManage() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          image: formData.image
+          name: cleanName,
+          description: cleanDescription,
+          price: numericPrice,
+          image: cleanImage
         })
       });
 
@@ -419,6 +439,31 @@ export default function CatalogManage() {
 
   const handleUpdateProduct = async (e) => {
     e.preventDefault();
+    const cleanName = String(formData.name || '').trim();
+    const cleanDescription = String(formData.description || '').trim();
+    const numericPrice = Number(formData.price);
+    const cleanImage = String(formData.image || '').trim();
+
+    if (!cleanName || !cleanDescription) {
+      alert('Product name and description are required.');
+      return;
+    }
+
+    if (!cleanImage) {
+      alert('Product image is required.');
+      return;
+    }
+
+    if (!Number.isFinite(numericPrice)) {
+      alert('Please enter a valid price.');
+      return;
+    }
+
+    if (numericPrice < 1000) {
+      alert('Price must be at least Rs. 1000.00');
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -429,10 +474,10 @@ export default function CatalogManage() {
         method: 'PUT',
         headers,
         body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          image: formData.image
+          name: cleanName,
+          description: cleanDescription,
+          price: numericPrice,
+          image: cleanImage
         })
       });
 
@@ -527,6 +572,7 @@ export default function CatalogManage() {
                   name="price"
                   type="number"
                   step="0.01"
+                  min="1000"
                   placeholder="e.g., 1500"
                   value={formData.price}
                   onChange={handleInputChange}
@@ -542,6 +588,7 @@ export default function CatalogManage() {
                   placeholder="Short description..."
                   value={formData.description}
                   onChange={handleInputChange}
+                  required
                   disabled={loading}
                 />
               </FormGroup>

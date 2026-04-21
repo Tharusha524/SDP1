@@ -20,6 +20,7 @@ import HandleInventory from "./HandleInventory.js";
 import AdminDashboard from "./AdminDashboard.jsx";
 import CatalogForStaff from "./CatalogForStaff.js";
 import CatalogForCustomer from "./CatalogForCustomer.js";
+import Cart from './Cart.jsx';
 import PaymentResult from "./PaymentResult";
 import OrderReview from "./OrderReview";
 import PaymentCheckout from "./PaymentCheckout.jsx";
@@ -43,6 +44,7 @@ function AnimatedRoutes() {
 
         {/* Customer Journey */}
         <Route path="/customer/catalog" element={<CatalogForCustomer />} />
+        <Route path="/customer/cart" element={<Cart />} />
         <Route path="/customer/place-order" element={<PlaceOrder />} />
         <Route path="/customer/payment" element={<PaymentCheckout />} />
         <Route path="/customer/track-order" element={<TrackOrder />} />

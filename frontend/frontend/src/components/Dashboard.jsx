@@ -6,6 +6,7 @@ function Dashboard({ user, setUser }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('cart');
     setUser(null);
     navigate('/login');
   };

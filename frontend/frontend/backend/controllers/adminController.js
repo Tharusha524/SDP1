@@ -42,7 +42,12 @@ exports.getDashboardStats = async (req, res) => {
       recentOrders
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('createTask error:', err);
+    if (err && (err.errno === 1452 || err.code === 'ER_NO_REFERENCED_ROW_2')) {
+      const msg = (err.sqlMessage && err.sqlMessage.includes('OrderID')) ? 'Invalid OrderID' : 'Invalid reference data';
+      return res.status(400).json({ success: false, error: msg });
+    }
+    res.status(500).json({ success: false, error: 'Server error while assigning task' });
   }
 };
 
@@ -141,6 +146,57 @@ exports.getOrdersReport = async (req, res) => {
       ORDER BY o.CreatedAt DESC
     `);
     res.json({ success: true, orders: ordersWithPayments || [] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// GET /api/admin/reports/inventory-usage
+// Returns total allocated quantity per inventory item for Completed orders
+exports.getInventoryUsageReport = async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        inv.InventoryID,
+        inv.InventoryName,
+        COALESCE(SUM(ai.Quantity), 0) AS UsedQuantity,
+        COUNT(DISTINCT ia.OrderID) AS CompletedOrders
+      FROM inventory_allocation ia
+      JOIN orders o ON o.OrderID = ia.OrderID
+      JOIN inventory_allocation_item ai ON ai.AllocationID = ia.AllocationID
+      JOIN inventory inv ON inv.InventoryID = ai.InventoryID
+      WHERE o.Status = 'Completed'
+        AND (ia.Status IS NULL OR ia.Status = 'Allocated')
+      GROUP BY inv.InventoryID, inv.InventoryName
+      ORDER BY UsedQuantity DESC
+    `);
+
+    res.json({ success: true, usage: rows || [] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// GET /api/admin/reports/customer-product-preferences
+// Returns how many distinct customers purchased each product (with product category) for Completed orders.
+exports.getCustomerProductPreferencesReport = async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        p.Category AS ProductType,
+        p.ProductID,
+        p.Name AS ProductName,
+        COUNT(DISTINCT o.CustomerID) AS CustomerCount,
+        COALESCE(SUM(oi.Quantity), 0) AS TotalQuantity
+      FROM orders o
+      JOIN orderitem oi ON oi.OrderID = o.OrderID
+      JOIN product p ON p.ProductID = oi.ProductID
+      WHERE o.Status <> 'Cancelled'
+      GROUP BY p.Category, p.ProductID, p.Name
+      ORDER BY CustomerCount DESC, TotalQuantity DESC, p.Name ASC
+    `);
+
+    res.json({ success: true, preferences: rows || [] });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

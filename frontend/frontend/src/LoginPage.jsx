@@ -393,10 +393,10 @@ const LoginPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
-            <VisualTitle>Elevate your <br />enterprise.</VisualTitle>
+            <VisualTitle>Run your <br />operations.</VisualTitle>
             <VisualSubtitle>
-              Orchestrating seamless inventory solutions with precision,
-              elegance, and total control at your fingertips.
+              Managing cement orders, inventory, staff tasks, and payments —
+              with clear tracking and full operational control.
             </VisualSubtitle>
             <CarouselIndicators>
               <Dot $active />

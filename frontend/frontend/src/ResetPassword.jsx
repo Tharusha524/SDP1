@@ -150,11 +150,16 @@ const ResetPassword = () => {
     const location = useLocation();
     const email = location.state?.email || '';
 
+    const validateEmail = (value) => {
+        if (!value || !value.trim()) return false;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    };
+
     const [step, setStep] = useState(1); // 1: OTP, 2: New Password
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-
+    const [passwordError, setPasswordError] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -164,6 +169,11 @@ const ResetPassword = () => {
     useEffect(() => {
         if (!email) {
             navigate('/login');
+            return;
+        }
+        if (!validateEmail(email)) {
+            // if the provided email is not a valid email, send user back to forgot page
+            navigate('/forgot-password');
         }
     }, [email, navigate]);
 
@@ -207,9 +217,25 @@ const ResetPassword = () => {
         }
     };
 
+    const validatePassword = (pwd) => {
+        if (!pwd) return 'Password is required';
+        if (pwd.length < 8) return 'Password must be at least 8 characters';
+        const complexity = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/;
+        if (!complexity.test(pwd)) return 'Password must include uppercase, lowercase, number and special characters (!@#$%^&*)';
+        return '';
+    };
+
     const handleReset = async () => {
-        if (password.length < 6) return setError('Password must be at least 6 characters');
-        if (password !== confirmPassword) return setError('Passwords do not match');
+        const pwdErr = validatePassword(password);
+        if (pwdErr) {
+            setPasswordError(pwdErr);
+            return setError(pwdErr);
+        }
+
+        if (password !== confirmPassword) {
+            setPasswordError('');
+            return setError('Passwords do not match');
+        }
 
         setLoading(true);
         setError('');
@@ -300,7 +326,8 @@ const ResetPassword = () => {
                                 <StyledInput
                                     type="password"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => { setPassword(e.target.value); setPasswordError(''); setError(''); }}
+                                    onBlur={() => { const msg = validatePassword(password); setPasswordError(msg); if (msg) setError(msg); }}
                                     placeholder="••••••••"
                                 />
                             </InputGroup>
@@ -310,12 +337,14 @@ const ResetPassword = () => {
                                 <StyledInput
                                     type="password"
                                     value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
+                                    onBlur={() => { if (password && confirmPassword && password !== confirmPassword) setError('Passwords do not match'); }}
                                     placeholder="••••••••"
                                 />
                             </InputGroup>
 
-                            {error && <ErrorMessage>{error}</ErrorMessage>}
+                            {passwordError && <ErrorMessage>{passwordError}</ErrorMessage>}
+                            {error && !passwordError && <ErrorMessage>{error}</ErrorMessage>}
 
                             <Button
                                 onClick={handleReset}

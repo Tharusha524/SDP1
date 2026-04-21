@@ -277,6 +277,21 @@ const HandleInventory = () => {
       return;
     }
 
+    const hasInvalidEnteredValue = orders.some(o => {
+      const fields = ['cement', 'sand', 'stone'];
+      return fields.some(field => {
+        const raw = (o[field] ?? '').toString().trim();
+        if (!raw) return false;
+        const num = Number(raw);
+        return !Number.isFinite(num) || num < 1;
+      });
+    });
+
+    if (hasInvalidEnteredValue) {
+      setError('Minimum value for raw material allocation is 1.');
+      return;
+    }
+
     const meaningful = orders.filter(o =>
       (o.cement && parseInt(o.cement || '0', 10) > 0) ||
       (o.sand && parseInt(o.sand || '0', 10) > 0) ||
@@ -408,9 +423,9 @@ const HandleInventory = () => {
                 <td>
                   <Input
                     type="number"
-                    min="0"
+                    min="1"
                     step="1"
-                    placeholder="0"
+                    placeholder="1"
                     value={order.cement}
                     onChange={(e) => handleInputChange(order.id, 'cement', e.target.value)}
                   />
@@ -418,9 +433,9 @@ const HandleInventory = () => {
                 <td>
                   <Input
                     type="number"
-                    min="0"
+                    min="1"
                     step="1"
-                    placeholder="0"
+                    placeholder="1"
                     value={order.sand}
                     onChange={(e) => handleInputChange(order.id, 'sand', e.target.value)}
                   />
@@ -428,9 +443,9 @@ const HandleInventory = () => {
                 <td>
                   <Input
                     type="number"
-                    min="0"
+                    min="1"
                     step="1"
-                    placeholder="0"
+                    placeholder="1"
                     value={order.stone}
                     onChange={(e) => handleInputChange(order.id, 'stone', e.target.value)}
                   />

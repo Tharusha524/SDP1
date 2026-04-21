@@ -183,14 +183,15 @@ function PaymentCheckout() {
   const [error, setError] = useState(null);
 
   const {
-    productId,
-    quantity,
+    items,
     details,
     productName,
     totalPrice,
     advanceAmount,
     remainingAmount
   } = state;
+
+  const normalizedItems = Array.isArray(items) ? items : [];
 
   const customerName = (() => {
     try {
@@ -227,7 +228,7 @@ function PaymentCheckout() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId, quantity, details }),
+        body: JSON.stringify({ items: normalizedItems, details }),
       });
 
       const data = await resp.json();
@@ -271,7 +272,7 @@ function PaymentCheckout() {
   const totalLabel = totalPrice ? totalPrice.toLocaleString() : "-";
   const remainingLabel = remainingAmount ? remainingAmount.toLocaleString() : "-";
 
-  const hasState = Boolean(productId && quantity && totalPrice);
+  const hasState = Boolean(normalizedItems.length && totalPrice);
 
   return (
     <Page>
@@ -314,8 +315,8 @@ function PaymentCheckout() {
                 <Value>{customerName || "Customer"}</Value>
               </div>
               <div>
-                <Label>Product</Label>
-                <Value>{productName || "Selected item"}</Value>
+                <Label>Products</Label>
+                <Value>{productName || `${normalizedItems.length} item(s)`}</Value>
               </div>
               <div>
                 <Label>Total</Label>

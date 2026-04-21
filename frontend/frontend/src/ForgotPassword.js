@@ -195,23 +195,6 @@ const SubmitButton = styled(motion.button)`
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 `;
 
-const Footer = styled.div`
-  text-align: center;
-  margin-top: 30px;
-  font-size: 0.9rem;
-  color: #6b7280;
-
-  span {
-    color: #111827;
-    font-weight: 700;
-    cursor: pointer;
-    margin-left: 5px;
-
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-`;
 
 const SuccessMessage = styled(motion.div)`
   background: #f0fdf4;
@@ -227,7 +210,8 @@ const SuccessMessage = styled(motion.div)`
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [isSubmitted] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -235,6 +219,12 @@ const ForgotPassword = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    // client-side email format validation
+    const emailMsg = validateEmail(email);
+    if (emailMsg) {
+      setEmailError(emailMsg);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -257,6 +247,12 @@ const ForgotPassword = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const validateEmail = (value) => {
+    if (!value || !value.trim()) return 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Please enter a valid email address';
+    return '';
   };
 
   return (
@@ -325,9 +321,15 @@ const ForgotPassword = () => {
                       required
                       placeholder="name@marukawa.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setEmailError(''); setError(''); }}
+                      onBlur={() => { const msg = validateEmail(email); setEmailError(msg); }}
                     />
                   </InputWrapper>
+                  {emailError && (
+                    <div style={{ color: '#dc2626', fontSize: '0.9rem', marginTop: '8px' }}>
+                      {emailError}
+                    </div>
+                  )}
                 </InputGroup>
 
                 {error && (
@@ -347,9 +349,6 @@ const ForgotPassword = () => {
               </Form>
             )}
 
-            <Footer>
-              Didn't receive the email? <span onClick={() => setIsSubmitted(false)}>Try again</span> or <span>Contact Support</span>
-            </Footer>
           </FormContainer>
         </FormSection>
       </PageContainer>

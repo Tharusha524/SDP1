@@ -1,6 +1,44 @@
 const db = require('../config/db');
 const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../utils/idGenerator');
 
+const MAX_ORDER_QUANTITY = 50;
+
+const normalizeOrderItems = (body) => {
+  const rawItems = Array.isArray(body?.items) ? body.items : [];
+  const fallbackProductId = body?.productId;
+  const fallbackQuantity = Number(body?.quantity);
+
+  const candidateItems = rawItems.length
+    ? rawItems
+    : (fallbackProductId && Number.isFinite(fallbackQuantity)
+      ? [{ productId: fallbackProductId, quantity: fallbackQuantity }]
+      : []);
+
+  const mergedByProduct = new Map();
+
+  for (const item of candidateItems) {
+    const productId = String(item?.productId || '').trim();
+    const quantity = Number(item?.quantity);
+
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
+      return { error: 'Each item must include a valid productId and positive quantity' };
+    }
+
+    if (quantity > MAX_ORDER_QUANTITY) {
+      return { error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per item` };
+    }
+
+    mergedByProduct.set(productId, (mergedByProduct.get(productId) || 0) + quantity);
+  }
+
+  const items = Array.from(mergedByProduct.entries()).map(([productId, quantity]) => ({
+    productId,
+    quantity
+  }));
+
+  return { items };
+};
+
 // GET /api/orders — all orders with customer name, items, totals (admin/staff)
 exports.getAllOrders = async (req, res) => {
   try {
@@ -130,6 +168,7 @@ exports.getOrderById = async (req, res) => {
 
 // POST /api/orders — create a new order for the logged-in customer
 exports.createOrder = async (req, res) => {
+  let conn;
   try {
     const user = req.user;
 
@@ -137,64 +176,85 @@ exports.createOrder = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only customers can place orders' });
     }
 
-    const { productId, quantity, details } = req.body;
+    const { details } = req.body || {};
+    const normalized = normalizeOrderItems(req.body);
 
-    if (!productId || !quantity || quantity <= 0) {
-      return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
+    if (normalized.error) {
+      return res.status(400).json({ success: false, error: normalized.error });
     }
-        
-      const MAX_ORDER_QUANTITY = 50;
-        
-      if (quantity > MAX_ORDER_QUANTITY) {
-        return res.status(400).json({
-          success: false,
-          error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per order`
-        });
-      }
 
-    // Get current product price snapshot
+    const items = normalized.items;
+    if (!items.length) {
+      return res.status(400).json({ success: false, error: 'At least one product item is required' });
+    }
+
+    const productIds = items.map((item) => item.productId);
+    const placeholders = productIds.map(() => '?').join(',');
+
     const [products] = await db.query(
-      'SELECT ProductID, Price FROM product WHERE ProductID = ?',
-      [productId]
+      `SELECT ProductID, Price FROM product WHERE ProductID IN (${placeholders})`,
+      productIds
     );
 
-    if (products.length === 0) {
-      return res.status(404).json({ success: false, error: 'Product not found or inactive' });
+    if (products.length !== productIds.length) {
+      return res.status(404).json({ success: false, error: 'One or more products were not found or inactive' });
     }
 
-    const product = products[0];
+    const productPriceById = new Map(
+      products.map((product) => [product.ProductID, Number(product.Price)])
+    );
 
-    const totalPrice = Number(product.Price) * quantity;
+    const lineItems = items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: productPriceById.get(item.productId) || 0
+    }));
+
+    const totalPrice = lineItems.reduce(
+      (sum, item) => sum + (item.unitPrice * item.quantity),
+      0
+    );
     const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
 
-    // Generate IDs
-    const orderId = await generateOrderId(db);
-    const orderItemId = await generateOrderItemId(db);
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    // Insert into orders table (3NF schema: Details instead of Address/SpecialInstructions)
-    // Do not set EstimatedCompletionDate on customer creation; staff/admin can set it later
-    await db.query(
+    const orderId = await generateOrderId(conn);
+
+    await conn.query(
       'INSERT INTO orders (OrderID, CustomerID, Status, Details) VALUES (?, ?, ?, ?)',
       [orderId, user.id, 'Pending', details || '']
     );
 
-    // Insert into orderitem table with price snapshot
-    await db.query(
-      'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase) VALUES (?, ?, ?, ?, ?)',
-      [orderItemId, orderId, product.ProductID, quantity, product.Price]
-    );
+    for (const item of lineItems) {
+      const orderItemId = await generateOrderItemId(conn);
+      await conn.query(
+        'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase) VALUES (?, ?, ?, ?, ?)',
+        [orderItemId, orderId, item.productId, item.quantity, item.unitPrice]
+      );
+    }
 
-    // Record the 40% advance payment in payment table
-    const paymentId = await generatePaymentId(db);
-    await db.query(
+    const paymentId = await generatePaymentId(conn);
+    await conn.query(
       'INSERT INTO payment (PaymentID, OrderID, Amount, Method, Status) VALUES (?, ?, ?, ?, ?)',
       [paymentId, orderId, advanceAmount, 'Online', 'Paid']
     );
 
+    await conn.commit();
+
     return res.status(201).json({ success: true, orderId });
   } catch (err) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore rollback errors
+      }
+    }
     console.error('Error creating order:', err);
     return res.status(500).json({ success: false, error: 'Failed to create order' });
+  } finally {
+    if (conn) conn.release();
   }
 };
 

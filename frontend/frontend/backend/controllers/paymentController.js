@@ -4,6 +4,42 @@ const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../
 
 const MAX_ORDER_QUANTITY = 50;
 
+const normalizeOrderItems = (body) => {
+  const rawItems = Array.isArray(body?.items) ? body.items : [];
+  const fallbackProductId = body?.productId;
+  const fallbackQuantity = Number(body?.quantity);
+
+  const candidateItems = rawItems.length
+    ? rawItems
+    : (fallbackProductId && Number.isFinite(fallbackQuantity)
+      ? [{ productId: fallbackProductId, quantity: fallbackQuantity }]
+      : []);
+
+  const mergedByProduct = new Map();
+
+  for (const item of candidateItems) {
+    const productId = String(item?.productId || '').trim();
+    const quantity = Number(item?.quantity);
+
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
+      return { error: 'Each item must include a valid productId and positive quantity' };
+    }
+
+    if (quantity > MAX_ORDER_QUANTITY) {
+      return { error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per item` };
+    }
+
+    mergedByProduct.set(productId, (mergedByProduct.get(productId) || 0) + quantity);
+  }
+
+  const items = Array.from(mergedByProduct.entries()).map(([productId, quantity]) => ({
+    productId,
+    quantity
+  }));
+
+  return { items };
+};
+
 const ensurePayherePendingTable = async (queryable) => {
   // queryable can be the pool or a transaction connection
   await queryable.query(`
@@ -12,6 +48,7 @@ const ensurePayherePendingTable = async (queryable) => {
       CustomerID VARCHAR(50) NOT NULL,
       ProductID VARCHAR(50) NOT NULL,
       Quantity INT NOT NULL,
+      ItemsJSON LONGTEXT NULL,
       Details TEXT,
       UnitPriceAtPurchase DECIMAL(10,2) NOT NULL,
       AdvanceAmount DECIMAL(10,2) NOT NULL,
@@ -25,6 +62,11 @@ const ensurePayherePendingTable = async (queryable) => {
       KEY idx_paid (Paid)
     )
   `);
+
+  const [itemsJsonColumn] = await queryable.query("SHOW COLUMNS FROM payhere_pending LIKE 'ItemsJSON'");
+  if (!itemsJsonColumn.length) {
+    await queryable.query('ALTER TABLE payhere_pending ADD COLUMN ItemsJSON LONGTEXT NULL AFTER Quantity');
+  }
 };
 
 // POST /api/payments/payhere-init
@@ -40,24 +82,45 @@ exports.payhereInit = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only customers can place orders' });
     }
 
-    const { productId, quantity, details } = req.body;
+    const { details } = req.body || {};
+    const normalized = normalizeOrderItems(req.body);
 
-    if (!productId || !quantity || quantity <= 0) {
-      return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
+    if (normalized.error) {
+      return res.status(400).json({ success: false, error: normalized.error });
     }
+
+    const items = normalized.items;
+    if (!items.length) {
+      return res.status(400).json({ success: false, error: 'At least one product item is required' });
+    }
+
+    const productIds = items.map((item) => item.productId);
+    const placeholders = productIds.map(() => '?').join(',');
 
     const [products] = await db.query(
-      'SELECT ProductID, Name, Price FROM product WHERE ProductID = ?',
-      [productId]
+      `SELECT ProductID, Name, Price FROM product WHERE ProductID IN (${placeholders})`,
+      productIds
     );
 
-    if (products.length === 0) {
-      return res.status(404).json({ success: false, error: 'Product not found or inactive' });
+    if (products.length !== productIds.length) {
+      return res.status(404).json({ success: false, error: 'One or more products were not found or inactive' });
     }
 
-    const product = products[0];
+    const productById = new Map(products.map((product) => [product.ProductID, product]));
+    const lineItems = items.map((item) => {
+      const product = productById.get(item.productId);
+      return {
+        productId: item.productId,
+        quantity: item.quantity,
+        name: product.Name,
+        unitPrice: Number(product.Price)
+      };
+    });
 
-    const totalPrice = Number(product.Price) * quantity;
+    const totalPrice = lineItems.reduce(
+      (sum, item) => sum + (item.unitPrice * item.quantity),
+      0
+    );
     const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
 
     // Fetch customer details for PayHere form
@@ -96,8 +159,11 @@ exports.payhereInit = async (req, res) => {
 
     const tokenPayload = {
       orderId,
-      productId: product.ProductID,
-      quantity,
+      items: lineItems.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice
+      })),
       details: details || '',
       customerId: user.id
     };
@@ -106,17 +172,19 @@ exports.payhereInit = async (req, res) => {
 
     const amountFormatted = advanceAmount.toFixed(2);
     const currency = 'LKR';
+    const firstItem = lineItems[0];
 
     // Store pending session in DB (used later by /api/payments/finalize)
     await ensurePayherePendingTable(db);
     await db.query(
       `INSERT INTO payhere_pending
-        (OrderID, CustomerID, ProductID, Quantity, Details, UnitPriceAtPurchase, AdvanceAmount, Currency, Paid)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        (OrderID, CustomerID, ProductID, Quantity, ItemsJSON, Details, UnitPriceAtPurchase, AdvanceAmount, Currency, Paid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
        ON DUPLICATE KEY UPDATE
          CustomerID = VALUES(CustomerID),
          ProductID = VALUES(ProductID),
          Quantity = VALUES(Quantity),
+         ItemsJSON = VALUES(ItemsJSON),
          Details = VALUES(Details),
          UnitPriceAtPurchase = VALUES(UnitPriceAtPurchase),
          AdvanceAmount = VALUES(AdvanceAmount),
@@ -128,10 +196,15 @@ exports.payhereInit = async (req, res) => {
       [
         orderId,
         user.id,
-        product.ProductID,
-        quantity,
+        firstItem.productId,
+        firstItem.quantity,
+        JSON.stringify(lineItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice
+        }))),
         details || '',
-        product.Price,
+        firstItem.unitPrice,
         amountFormatted,
         currency
       ]
@@ -159,7 +232,7 @@ exports.payhereInit = async (req, res) => {
       // safely write the order and payment records before the browser redirect.
       notify_url: `${backendBase}/api/payments/payhere-return`,
       order_id: orderId,
-      items: product.Name,
+      items: lineItems.map((item) => item.name).join(', ').slice(0, 255),
       amount: amountFormatted,
       currency,
       hash,
@@ -252,59 +325,78 @@ exports.payhereReturn = async (req, res) => {
 // Creates the order, order item, and a PAID payment row directly in MySQL
 // and returns the new orderId to the frontend.
 exports.cardDirectPayment = async (req, res) => {
+  let conn;
   try {
     const user = req.user;
     if (!user || user.role !== 'customer') {
       return res.status(403).json({ success: false, error: 'Only customers can place orders' });
     }
 
-    const { productId, quantity, details } = req.body;
-    if (!productId || !quantity || quantity <= 0) {
-      return res.status(400).json({ success: false, error: 'Product and positive quantity are required' });
+    const { details } = req.body || {};
+    const normalized = normalizeOrderItems(req.body);
+
+    if (normalized.error) {
+      return res.status(400).json({ success: false, error: normalized.error });
     }
 
-    if (quantity > MAX_ORDER_QUANTITY) {
-      return res.status(400).json({
-        success: false,
-        error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per order`
-      });
+    const items = normalized.items;
+    if (!items.length) {
+      return res.status(400).json({ success: false, error: 'At least one product item is required' });
     }
 
-    // Check product exists and is active
+    const productIds = items.map((item) => item.productId);
+    const placeholders = productIds.map(() => '?').join(',');
+
     const [products] = await db.query(
-      'SELECT `ProductID`, `Name`, `Price` FROM `product` WHERE `ProductID` = ?',
-      [productId]
+      `SELECT ProductID, Name, Price FROM product WHERE ProductID IN (${placeholders})`,
+      productIds
     );
 
-    if (!products || products.length === 0) {
-      return res.status(404).json({ success: false, error: 'Product with ID ' + productId + ' not found or inactive' });
+    if (products.length !== productIds.length) {
+      return res.status(404).json({ success: false, error: 'One or more products were not found or inactive' });
     }
 
-    const product = products[0];
-    const totalPrice = Number(product.Price) * quantity;
+    const productById = new Map(products.map((product) => [product.ProductID, product]));
+    const lineItems = items.map((item) => {
+      const product = productById.get(item.productId);
+      return {
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: Number(product.Price)
+      };
+    });
+
+    const totalPrice = lineItems.reduce(
+      (sum, item) => sum + (item.unitPrice * item.quantity),
+      0
+    );
     const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
 
-    const orderId = await generateOrderId(db);
-    const orderItemId = await generateOrderItemId(db);
-    const paymentId = await generatePaymentId(db);
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    // Create order (do not set EstimatedCompletionDate here; staff/admin may update later)
-    await db.query(
+    const orderId = await generateOrderId(conn);
+    const paymentId = await generatePaymentId(conn);
+
+    await conn.query(
       'INSERT INTO `orders` (`OrderID`, `CustomerID`, `Status`, `Details`) VALUES (?, ?, ?, ?)',
       [orderId, user.id, 'Pending', details || '']
     );
 
-    // Create order item
-    await db.query(
-      'INSERT INTO `orderitem` (`OrderItemID`, `OrderID`, `ProductID`, `Quantity`, `UnitPriceAtPurchase`) VALUES (?, ?, ?, ?, ?)',
-      [orderItemId, orderId, product.ProductID, quantity, product.Price]
-    );
+    for (const item of lineItems) {
+      const orderItemId = await generateOrderItemId(conn);
+      await conn.query(
+        'INSERT INTO `orderitem` (`OrderItemID`, `OrderID`, `ProductID`, `Quantity`, `UnitPriceAtPurchase`) VALUES (?, ?, ?, ?, ?)',
+        [orderItemId, orderId, item.productId, item.quantity, item.unitPrice]
+      );
+    }
 
-    // Record payment
-    await db.query(
+    await conn.query(
       'INSERT INTO `payment` (`PaymentID`, `OrderID`, `Amount`, `Method`, `Status`) VALUES (?, ?, ?, ?, ?)',
       [paymentId, orderId, advanceAmount, 'online', 'Paid']
     );
+
+    await conn.commit();
 
     return res.json({
       success: true,
@@ -313,8 +405,17 @@ exports.cardDirectPayment = async (req, res) => {
       advanceAmount
     });
   } catch (err) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore rollback errors
+      }
+    }
     console.error('Payment error:', err.message, err.sql);
     return res.status(500).json({ success: false, error: err.message || 'Failed to complete payment' });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
@@ -361,14 +462,32 @@ exports.finalizeOrder = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Payment not confirmed yet' });
     }
 
-    // Ensure product still exists
-    const [products] = await conn.query('SELECT ProductID FROM product WHERE ProductID = ? LIMIT 1', [pending.ProductID]);
-    if (!products.length) {
+    let pendingItems;
+    try {
+      pendingItems = pending.ItemsJSON
+        ? JSON.parse(pending.ItemsJSON)
+        : [{ productId: pending.ProductID, quantity: Number(pending.Quantity), unitPrice: Number(pending.UnitPriceAtPurchase) }];
+    } catch {
       await conn.rollback();
-      return res.status(404).json({ success: false, error: 'Product not found' });
+      return res.status(400).json({ success: false, error: 'Pending payment items are invalid' });
     }
 
-    const orderItemId = await generateOrderItemId(conn);
+    if (!Array.isArray(pendingItems) || !pendingItems.length) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, error: 'No order items found in pending payment session' });
+    }
+
+    const pendingProductIds = pendingItems.map((item) => item.productId);
+    const placeholders = pendingProductIds.map(() => '?').join(',');
+    const [products] = await conn.query(
+      `SELECT ProductID FROM product WHERE ProductID IN (${placeholders})`,
+      pendingProductIds
+    );
+    if (products.length !== pendingProductIds.length) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, error: 'One or more products from this order no longer exist' });
+    }
+
     const paymentId = await generatePaymentId(conn);
 
     await conn.query(
@@ -376,10 +495,13 @@ exports.finalizeOrder = async (req, res) => {
       [orderId, user.id, 'Pending', pending.Details || '']
     );
 
-    await conn.query(
-      'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase) VALUES (?, ?, ?, ?, ?)',
-      [orderItemId, orderId, pending.ProductID, pending.Quantity, pending.UnitPriceAtPurchase]
-    );
+    for (const item of pendingItems) {
+      const orderItemId = await generateOrderItemId(conn);
+      await conn.query(
+        'INSERT INTO orderitem (OrderItemID, OrderID, ProductID, Quantity, UnitPriceAtPurchase) VALUES (?, ?, ?, ?, ?)',
+        [orderItemId, orderId, item.productId, item.quantity, item.unitPrice]
+      );
+    }
 
     await conn.query(
       'INSERT INTO payment (PaymentID, OrderID, Amount, Method, Status) VALUES (?, ?, ?, ?, ?)',

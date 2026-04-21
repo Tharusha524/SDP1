@@ -18,6 +18,8 @@ router.get('/inventory', authenticateToken, authorizeRole('admin', 'staff'), adm
 
 // Reports (admin only)
 router.get('/reports/orders', authenticateToken, authorizeRole('admin'), adminController.getOrdersReport);
+router.get('/reports/inventory-usage', authenticateToken, authorizeRole('admin'), adminController.getInventoryUsageReport);
+router.get('/reports/customer-product-preferences', authenticateToken, authorizeRole('admin'), adminController.getCustomerProductPreferencesReport);
 
 // Update order status (admin only)
 router.patch('/orders/:id/status', authenticateToken, authorizeRole('admin'), adminController.updateOrderStatus);

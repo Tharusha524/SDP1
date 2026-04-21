@@ -93,7 +93,7 @@ const buildAllocationSelectQuery = () => `
                  CONCAT(
                    LOWER(inv.InventoryName),
                    ' ',
-                   TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(iai.Quantity AS CHAR))),
+                   CAST(iai.Quantity AS CHAR),
                    'kg'
                  )
                  ORDER BY inv.InventoryName SEPARATOR ', '

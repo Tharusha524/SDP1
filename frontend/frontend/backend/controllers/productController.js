@@ -28,14 +28,34 @@ exports.createProduct = async (req, res) => {
   const { name, description, price, image } = req.body;
   
   console.log('Creating product with data:', { name, price, hasImage: !!image });
-  
-  if (!name || !price) {
-    console.error('Validation failed: Missing name or price');
-    return res.status(400).json({ success: false, error: 'Name and price are required' });
+
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  const cleanDescription = typeof description === 'string' ? description.trim() : '';
+  const numericPrice = Number(price);
+  const cleanImage = typeof image === 'string' ? image.trim() : '';
+
+  if (!cleanName || !cleanDescription) {
+    console.error('Validation failed: Missing name or description');
+    return res.status(400).json({ success: false, error: 'Name and description are required' });
+  }
+
+  if (!Number.isFinite(numericPrice)) {
+    console.error('Validation failed: Invalid price');
+    return res.status(400).json({ success: false, error: 'Valid price is required' });
+  }
+
+  if (numericPrice < 1000) {
+    console.error('Validation failed: Price below minimum');
+    return res.status(400).json({ success: false, error: 'Price must be at least Rs. 1000.00' });
+  }
+
+  if (!cleanImage) {
+    console.error('Validation failed: Missing image');
+    return res.status(400).json({ success: false, error: 'Product image is required' });
   }
 
   try {
-    const productId = await Product.create({ name, description, price, image });
+    const productId = await Product.create({ name: cleanName, description: cleanDescription, price: numericPrice, image: cleanImage });
     console.log('Product created successfully:', productId);
     res.status(201).json({ success: true, productId, message: 'Product created successfully' });
   } catch (err) {
@@ -48,9 +68,30 @@ exports.createProduct = async (req, res) => {
 // Update product
 exports.updateProduct = async (req, res) => {
   const { name, description, price, image } = req.body;
-  
+
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  const cleanDescription = typeof description === 'string' ? description.trim() : '';
+  const numericPrice = Number(price);
+  const cleanImage = typeof image === 'string' ? image.trim() : '';
+
+  if (!cleanName || !cleanDescription) {
+    return res.status(400).json({ success: false, error: 'Name and description are required' });
+  }
+
+  if (!Number.isFinite(numericPrice)) {
+    return res.status(400).json({ success: false, error: 'Valid price is required' });
+  }
+
+  if (numericPrice < 1000) {
+    return res.status(400).json({ success: false, error: 'Price must be at least Rs. 1000.00' });
+  }
+
+  if (!cleanImage) {
+    return res.status(400).json({ success: false, error: 'Product image is required' });
+  }
+
   try {
-    const updated = await Product.update(req.params.id, { name, description, price, image });
+    const updated = await Product.update(req.params.id, { name: cleanName, description: cleanDescription, price: numericPrice, image: cleanImage });
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }

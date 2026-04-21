@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt, FaUser, FaUserPlus, FaTachometerAlt } from 'react-icons/fa';
+import { FaShoppingCart, FaSearch, FaBars, FaTimes, FaTruck, FaSignOutAlt, FaUser, FaUserPlus, FaTachometerAlt, FaArrowLeft } from 'react-icons/fa';
 import img1 from './assets/WhatsApp Image 2026-01-20 at 09.06.33 (1).jpeg';
 import img2 from './assets/WhatsApp Image 2026-01-20 at 09.06.34.jpeg';
 import img3 from './assets/login-hero.png';
@@ -144,6 +144,24 @@ const SidebarOpenBtn = styled.button`
   transition: background 0.2s;
 
   &:hover { background: rgba(192, 160, 98, 0.1); }
+`;
+
+const BackToLandingBtn = styled.button`
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #c0a062;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 10px;
+  transition: background 0.2s, border-color 0.2s;
+
+  &:hover {
+    background: rgba(192,160,98,0.10);
+    border-color: rgba(192,160,98,0.35);
+  }
 `;
 
 const HeaderTitle = styled.h1`
@@ -377,6 +395,7 @@ const ActionButton = styled.button`
   }
 `;
 
+
 const Footer = styled.footer`
   text-align: center;
   padding: 30px;
@@ -438,6 +457,7 @@ const CatalogForCustomer = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [cartCount, setCartCount] = useState(0);
 
   // Auth state — read from localStorage
   const [user, setUser] = useState(null);
@@ -457,10 +477,22 @@ const CatalogForCustomer = () => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('cart');
+      const parsed = raw ? JSON.parse(raw) : [];
+      setCartCount(parsed.length || 0);
+    } catch {
+      setCartCount(0);
+    }
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('cart');
     setUser(null);
+    setCartCount(0);
     navigate('/catalog');
   };
 
@@ -475,28 +507,28 @@ const CatalogForCustomer = () => {
     return roleRoutes[role] || '/catalog';
   };
 
-  // Place order for a specific product; require login
-  const handlePlaceOrder = (product) => {
+  // (Order-now flow removed — use Add to Cart / Cart page to place multi-item orders)
+
+  const addToCart = (product) => {
     if (!user) { navigate('/login'); return; }
-
-    const productId = product.ProductID;
-    const productName = product.Name || product.title;
-    const rawPrice = (product.Price != null ? product.Price : product.price);
-    let unitPrice = 0;
-
-    if (typeof rawPrice === 'number') {
-      unitPrice = rawPrice;
-    } else if (typeof rawPrice === 'string') {
-      const numeric = rawPrice.replace(/[^0-9.]/g, '');
-      unitPrice = Number(numeric) || 0;
+    try {
+      const raw = localStorage.getItem('cart');
+      const parsed = raw ? JSON.parse(raw) : [];
+      // default quantity 1
+      const existingIndex = parsed.findIndex(i => i.productId === product.ProductID);
+      if (existingIndex >= 0) {
+        parsed[existingIndex].quantity = (parsed[existingIndex].quantity || 0) + 1;
+      } else {
+        parsed.push({ productId: product.ProductID, quantity: 1 });
+      }
+      localStorage.setItem('cart', JSON.stringify(parsed));
+      setCartCount(parsed.length);
+      // small UX feedback
+      alert('Added to cart');
+    } catch (e) {
+      console.error('Failed to add to cart', e);
+      alert('Could not add to cart');
     }
-
-    const productPrice = unitPrice;
-    const productDesc = product.Description || product.desc;
-
-    navigate('/customer/place-order', {
-      state: { productId, productName, productPrice, unitPrice, productDesc }
-    });
   };
 
   // Prefer real products from DB; filter to the six configured items by image, then fall back to static list if needed
@@ -611,6 +643,9 @@ const CatalogForCustomer = () => {
                 <SidebarOpenBtn onClick={() => setIsSidebarOpen(true)}>
                   <FaBars />
                 </SidebarOpenBtn>
+                  <BackToLandingBtn onClick={() => navigate('/')} aria-label="Back to landing page" title="Back">
+                    <FaArrowLeft />
+                  </BackToLandingBtn>
                 <HeaderTitle>Product Collection</HeaderTitle>
               </HeaderLeft>
 
@@ -629,8 +664,11 @@ const CatalogForCustomer = () => {
                 {/* Customer: cart icon + profile + logout */}
                 {isCustomer && (
                   <>
-                    <NotificationIcon onClick={() => navigate('/customer/place-order')}>
+                    <NotificationIcon onClick={() => navigate('/customer/cart')} title="View cart" style={{ position: 'relative' }}>
                       <FaShoppingCart size={20} />
+                      {cartCount > 0 && (
+                        <div style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#fff', borderRadius: 999, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>{cartCount}</div>
+                      )}
                     </NotificationIcon>
                     <ProfileCircle
                       onClick={() => navigate('/customer/profile')}
@@ -698,9 +736,11 @@ const CatalogForCustomer = () => {
                       </ProductPrice>
                     </ProductHeader>
                     <ProductDesc>{product.Description || product.desc}</ProductDesc>
-                    <ActionButton onClick={() => handlePlaceOrder(product)}>
-                      {user ? 'Place Order' : 'Add to Cart'} <FaShoppingCart />
-                    </ActionButton>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <ActionButton onClick={() => addToCart(product)}>
+                        Add to Cart <FaShoppingCart />
+                      </ActionButton>
+                    </div>
                   </ProductInfo>
                 </ProductCard>
               ))}
