@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft } from 'react-icons/fa';
 import styled from 'styled-components';
 
+/*
+  Cart.jsx
+  - Purpose: show and manage the customer's shopping cart.
+  - Data: reads/writes `localStorage.cart` (client-side, per device).
+  - Actions: change item qty, remove item, add notes, proceed to payment.
+  - Note: server-side order creation is handled at /api/payments and /api/orders.
+*/
+
 const Page = styled.div`
   min-height: 100vh;
   padding: 40px 20px;
@@ -138,6 +146,12 @@ const ActionGroup = styled.div`
   gap: 10px;
 `;
 
+/**
+ * Cart component
+ * - Loads cart from localStorage and fetches product metadata from backend.
+ * - Keeps cart state in React and persists updates to localStorage.
+ * - Proceed navigates to the payment page with items and totals in location state.
+ */
 export default function Cart() {
   const navigate = useNavigate();
   const [cart, setCart] = useState([]);
