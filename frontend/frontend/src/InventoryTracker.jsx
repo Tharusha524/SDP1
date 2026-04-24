@@ -4,6 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaExclamationTriangle, FaDollyFlatbed, FaClock, FaCheckCircle, FaChartLine, FaSignOutAlt } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
+// Inventory tracker (admin/staff).
+// - Loads raw-material inventory from the backend
+// - Highlights low-stock items (stock <= threshold)
+// - Allows non-negative stock adjustments and sends PATCH updates to the backend
+// - Shows toast feedback and an optional low-stock banner
+
 // --- Global Aesthetics ---
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -206,6 +212,7 @@ const AlertToast = styled(motion.div)`
 const InventoryTracker = () => {
     const navigate = useNavigate();
 
+    // Clears auth/session state and returns the user to the catalog.
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
@@ -213,20 +220,33 @@ const InventoryTracker = () => {
         navigate('/catalog');
     };
 
+    // Inventory rows rendered in the table.
+    // Each row includes an `update` field used by the Adjustment input.
     const [materials, setMaterials] = useState([]);
+
+    // Page-level loading indicator for the initial inventory load.
     const [loading, setLoading] = useState(true);
+
+    // Banner shown when at least one item is at/below its threshold.
     const [showLowStockMsg, setShowLowStockMsg] = useState(false);
+
+    // Toast notifications for success/errors.
     const [toast, setToast] = useState({ show: false, msg: '' });
 
+    // Auth header used by inventory endpoints.
     const token = localStorage.getItem('token');
     const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     useEffect(() => {
+        // Guard: this page requires a token.
         if (!token) { navigate('/login'); return; }
+
+        // Load current inventory from the backend.
         fetch('http://localhost:5000/api/inventory', { headers: authHeader })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
+                    // Normalize backend data into UI-friendly rows.
                     const mapped = data.inventory.map(i => ({
                         id: i.InventoryID,
                         name: i.InventoryName,
@@ -237,6 +257,7 @@ const InventoryTracker = () => {
                         updateError: ''
                     }));
                     setMaterials(mapped);
+                    // Low stock if current stock is <= threshold.
                     setShowLowStockMsg(mapped.some(m => Number(m.stock) <= Number(m.threshold)));
                 }
             })
@@ -245,6 +266,11 @@ const InventoryTracker = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Validates and stores the per-row adjustment input.
+    // Rules:
+    // - empty input clears errors
+    // - only numeric input allowed
+    // - negative values are rejected and show an error
     const handleInputChange = (id, value) => {
         // empty -> clear error
         if (value === '') {
@@ -274,7 +300,10 @@ const InventoryTracker = () => {
         setMaterials(prev => prev.map(m => m.id === id ? { ...m, update: String(parsed), updateError: '' } : m));
     };
 
+    // Sends PATCH requests for rows that have an entered adjustment.
+    // After successful updates, it refreshes the inventory list from the backend.
     const updateStock = async () => {
+        // Only include rows with a valid numeric update value.
         const itemsToUpdate = materials
             .filter(m => m.update !== '' && !isNaN(parseInt(m.update, 10)))
             .map(m => ({ ...m, parsed: parseInt(m.update, 10) }));
@@ -294,6 +323,7 @@ const InventoryTracker = () => {
         }
 
         try {
+            // Update each changed inventory row.
             const responses = await Promise.all(itemsToUpdate.map(m =>
                 fetch(`http://localhost:5000/api/inventory/${m.id}`, {
                     method: 'PATCH',
@@ -302,6 +332,7 @@ const InventoryTracker = () => {
                 })
             ));
 
+            // Collect failures (if any) so we can show a single message.
             const failed = [];
             for (let i = 0; i < responses.length; i++) {
                 const res = responses[i];
@@ -322,6 +353,7 @@ const InventoryTracker = () => {
             const res = await fetch('http://localhost:5000/api/inventory', { headers: authHeader });
             const data = await res.json();
             if (data.success) {
+                // Rebuild rows from the refreshed inventory response.
                 const mapped = data.inventory.map(i => ({
                     id: i.InventoryID,
                     name: i.InventoryName,
@@ -341,6 +373,9 @@ const InventoryTracker = () => {
         setTimeout(() => setToast({ show: false, msg: '' }), 4000);
     };
 
+    // Button enable/disable logic:
+    // - must have at least one valid row update
+    // - must not have any row validation errors
     const hasValidUpdate = materials.some(m => m.update !== '' && !isNaN(parseInt(m.update, 10)) && parseInt(m.update, 10) >= 0 && !m.updateError);
     const hasInvalidUpdate = materials.some(m => m.updateError && m.updateError.length > 0);
 
@@ -350,6 +385,7 @@ const InventoryTracker = () => {
             <Container>
                 <Header>
                     <TitleSection>
+                        {/* Subtitle is currently unused/empty but kept for layout consistency */}
                         <Subtitle
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -365,6 +401,7 @@ const InventoryTracker = () => {
                             Real-Time Tracker
                         </Title>
                     </TitleSection>
+                    {/* Logout clears localStorage and redirects */}
                     <LogoutButton onClick={handleLogout}>
                         <FaSignOutAlt /> Logout
                     </LogoutButton>
@@ -372,6 +409,7 @@ const InventoryTracker = () => {
 
                 <AnimatePresence>
                     {showLowStockMsg && (
+                        // Warning banner when any inventory item is low.
                         <LowStockBanner
                             initial={{ opacity: 0, y: -20, height: 0 }}
                             animate={{ opacity: 1, y: 0, height: 'auto' }}
@@ -395,6 +433,7 @@ const InventoryTracker = () => {
                             </tr>
                         </thead>
                         <tbody>
+                            {/* Table states: loading, empty, or mapped inventory rows */}
                             {loading ? (
                                 <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'rgba(255,255,255,0.3)' }}>Loading inventory...</td></tr>
                             ) : materials.length === 0 ? (
@@ -417,6 +456,7 @@ const InventoryTracker = () => {
                                     <td style={{ opacity: 0.4 }}>{mat.threshold}</td>
                                     <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem', opacity: 0.6 }}>{mat.alertTime}</td>
                                     <td>
+                                        {/* Per-row adjustment input (validated in handleInputChange) */}
                                         <Input
                                             type="number"
                                             min="0"
@@ -436,6 +476,7 @@ const InventoryTracker = () => {
                     </Table>
                 </GlassTable>
 
+                {/* Updates only rows where an Adjustment value is entered */}
                 <UpdateButton
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -448,6 +489,7 @@ const InventoryTracker = () => {
 
                 <AnimatePresence>
                     {toast.show && (
+                        // Bottom-right toast for feedback messages.
                         <AlertToast
                             initial={{ opacity: 0, y: 50, scale: 0.9 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}

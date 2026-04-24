@@ -1,9 +1,15 @@
+// Admin dashboard page: UI for admin to see stats, orders, inventory, reports, and manage site.
 import React, { useState, useEffect } from "react";
+// Styled components for building UI
 import styled, { createGlobalStyle } from "styled-components";
+// Motion helpers for small animations
 import { motion, AnimatePresence } from "framer-motion";
+// Navigation hook to move between pages
 import { useNavigate } from "react-router-dom";
-import HandleInventory from "./HandleInventory.js";
-import CatalogManage from "./CatalogManage.js";
+// Sub-pages used inside admin dashboard
+import HandleInventory from "./HandleInventory.jsx";
+import CatalogManage from "./CatalogManage.jsx";
+// PDF export libraries used by the reports page
 import jsPDF from 'jspdf';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
@@ -11,6 +17,13 @@ import html2canvas from 'html2canvas';
 
 ChartJS.register(ArcElement, Tooltip, Legend, Title, CategoryScale, LinearScale, BarElement, LineElement, PointElement);
 
+// Register Chart.js components once so chart instances used by the
+// dashboard and report exports have the necessary elements/plugins available.
+// This is a one-time setup step required by react-chartjs-2 when using
+// tree-shaken Chart.js bundles.
+
+
+// API base and helper to add auth header to requests
 const API_BASE = 'http://localhost:5000';
 const getAuthHeaders = () => ({
   'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -48,8 +61,9 @@ const GlobalStyle = createGlobalStyle`
   }
 `;
 
-// --- Styled Components ---
+// Styled components: visual building blocks for the admin page (sidebar, cards, tables)
 
+// Page layout container: holds sidebar and main area
 const AdminLayout = styled.div`
   display: flex;
   min-height: 100vh;
@@ -71,7 +85,7 @@ const AdminLayout = styled.div`
   }
 `;
 
-// Sidebar
+// Sidebar panel: navigation menu on the left of the page
 const SidebarPanel = styled(motion.aside)`
   position: fixed;
   top: 0;
@@ -80,7 +94,7 @@ const SidebarPanel = styled(motion.aside)`
   height: 100vh;
   background: rgba(17, 17, 17, 0.95);
   backdrop-filter: blur(16px);
-  color: #f3f4f6;
+  color: #ffffff;
   z-index: 200;
   display: flex;
   flex-direction: column;
@@ -98,11 +112,13 @@ const SidebarPanel = styled(motion.aside)`
   }
 `;
 
+// Overlay shown when the sidebar is open on small screens
 const SidebarOverlay = styled(motion.div)`
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   background: rgba(0,0,0,0.5); z-index: 150; backdrop-filter: blur(4px);
 `;
 
+// Branding area inside the sidebar (logo and name)
 const Brand = styled.div`
   margin-bottom: 40px;
   display: flex;
@@ -110,15 +126,17 @@ const Brand = styled.div`
   gap: 12px;
 `;
 
+// Logo text style (shows site name)
 const LogoText = styled.h1`
   font-family: 'Playfair Display', serif;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #c0a062; /* Gold Logo */
+  color: #a18244; /* Gold Logo */
   margin: 0;
   letter-spacing: 1px;
 `;
 
+// Navigation list that holds the sidebar menu items
 const NavList = styled.nav`
   display: flex;
   flex-direction: column;
@@ -126,6 +144,7 @@ const NavList = styled.nav`
   flex: 1;
 `;
 
+// Style for a single navigation item (clickable menu button)
 const NavItem = styled.button`
   background: ${props => props.$active ? 'rgba(192, 160, 98, 0.15)' : 'transparent'};
   color: ${props => props.$active ? '#c0a062' : 'rgba(255,255,255,0.6)'};
@@ -164,6 +183,7 @@ const NavItem = styled.button`
   }
 `;
 
+// User profile area at bottom of sidebar showing avatar and role
 const UserProfile = styled.div`
   margin-top: auto;
   padding-top: 24px;
@@ -173,6 +193,7 @@ const UserProfile = styled.div`
   gap: 12px;
 `;
 
+// Avatar image for admin user
 const Avatar = styled.img`
   width: 40px; height: 40px;
   border-radius: 50%;
@@ -180,15 +201,16 @@ const Avatar = styled.img`
   border: 2px solid #c0a062;
 `;
 
+// Small user info area showing name and role
 const UserInfo = styled.div`
   display: flex;
   flex-direction: column;
   
   span.name { color: #f3f4f6; font-weight: 600; font-size: 0.9rem; }
-  span.role { color: #c0a062; font-size: 0.75rem; font-weight: 600; }
+  span.role { color: #947e52; font-size: 0.75rem; font-weight: 600; }
 `;
 
-// Main Content
+// Main content area where different admin views are shown
 const MainArea = styled.main`
   flex: 1;
   margin-left: 280px;
@@ -201,6 +223,7 @@ const MainArea = styled.main`
   }
 `;
 
+// Top bar with page title and quick actions
 const TopBar = styled.header`
   display: flex;
   justify-content: space-between;
@@ -208,6 +231,7 @@ const TopBar = styled.header`
   margin-bottom: 32px;
 `;
 
+// Page header showing current tab name and a short subtitle
 const PageHeader = styled.div`
   h2 {
     font-family: 'Playfair Display', serif;
@@ -224,6 +248,7 @@ const PageHeader = styled.div`
   }
 `;
 
+// Button shown on mobile to open the sidebar menu
 const MobileMenuBtn = styled.button`
   display: none;
   background: rgba(255,255,255,0.05);
@@ -242,7 +267,7 @@ const MobileMenuBtn = styled.button`
   }
 `;
 
-// Dashboard Cards
+// Grid that shows small statistic cards at the top of the dashboard
 const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -250,6 +275,7 @@ const StatsGrid = styled.div`
   margin-bottom: 32px;
 `;
 
+// Individual statistic card (shows a label, value and trend)
 const StatCard = styled(motion.div)`
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(16px);
@@ -275,8 +301,9 @@ const StatCard = styled(motion.div)`
   @apply glass-animated;
 `;
 
+// Small label text inside a stat card
 const StatLabel = styled.span`
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(149, 143, 143, 0.4);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -284,6 +311,7 @@ const StatLabel = styled.span`
   margin-bottom: 8px;
 `;
 
+// Big numeric value in a stat card
 const StatValue = styled.span`
   color: #f3f4f6;
   font-size: 2.25rem;
@@ -292,6 +320,7 @@ const StatValue = styled.span`
   letter-spacing: -0.5px;
 `;
 
+// Small trend line or note under the stat value
 const StatTrend = styled.span`
   margin-top: 12px;
   font-size: 0.85rem;
@@ -304,7 +333,7 @@ const StatTrend = styled.span`
   &.negative { color: #ef4444; }
 `;
 
-// Tables and Content Containers
+// Card used to wrap tables and content sections in the main area
 const ContentCard = styled(motion.div)`
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(16px);
@@ -315,6 +344,7 @@ const ContentCard = styled(motion.div)`
   margin-bottom: 24px;
 `;
 
+// Table style used for listing rows (orders, staff, inventory)
 const Table = styled.table`
   width: 100%;
   border-collapse: separate;
@@ -351,6 +381,7 @@ const Table = styled.table`
   }
 `;
 
+// Small rounded badge that shows a status (e.g., Pending, Completed)
 const StatusChip = styled.span`
   padding: 4px 10px;
   border-radius: 20px;
@@ -371,6 +402,7 @@ const StatusChip = styled.span`
   }}
 `;
 
+// Primary action button style (gold button used for actions)
 const ActionButton = styled.button`
   background: linear-gradient(135deg, #c0a062 0%, #d4b886 100%);
   color: #000;
@@ -392,7 +424,7 @@ const ActionButton = styled.button`
   }
 `;
 
-// --- SVGs ---
+// Small inline SVG icons used in the sidebar menu
 const Icons = {
   Dashboard: () => <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>,
   Orders: () => <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>,
@@ -406,36 +438,52 @@ const Icons = {
 };
 
 
-// --- Views ---
+// Views: different screens shown in the main area (Dashboard, Orders, etc.)
 
+// Dashboard view: shows quick stats and a list of recent orders
 const DashboardView = () => {
+  // `stats` holds aggregated dashboard numbers returned by the API
+  // e.g. { totalOrders, totalRevenue, pendingTasks, pendingOrders }
   const [stats, setStats] = useState(null);
+
+  // `recentOrders` is an array of the latest order rows to show in the table
   const [recentOrders, setRecentOrders] = useState([]);
+
+  // `loading` toggles placeholders while the initial fetch (and polling) run
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // fetchStats: requests summary + recent orders from backend
+    // On success we update `stats` and `recentOrders`.
+    // `.finally` clears the loading flag so UI shows real values or fallbacks.
     const fetchStats = () => {
       fetch(`${API_BASE}/api/admin/stats`, { headers: getAuthHeaders() })
         .then(r => r.json())
         .then(data => {
           if (data.success) {
+            // update aggregated numbers used by the stat cards
             setStats(data.stats);
+            // update recent orders table (fallback to empty array)
             setRecentOrders(data.recentOrders || []);
           }
         })
+        // log network/parsing errors to console during development
         .catch(console.error)
         .finally(() => setLoading(false));
     };
 
-    // Initial load
+    // Fetch once when component mounts
     fetchStats();
 
-    // Poll every 10 seconds for near real-time updates while on dashboard
+    // Poll every 10 seconds so the dashboard stays up-to-date
     const intervalId = setInterval(fetchStats, 10000);
 
+    // Cleanup: stop polling when component unmounts
     return () => clearInterval(intervalId);
   }, []);
 
+  // Helper to format revenue numbers into readable strings used in UI.
+  // Examples: 1234 -> "Rs. 1,234", 12000 -> "Rs. 12K", 2500000 -> "Rs. 2.5M"
   const fmtRevenue = (n) => {
     const num = Number(n || 0);
     if (num >= 1000000) return `Rs. ${(num / 1000000).toFixed(1)}M`;
@@ -445,6 +493,7 @@ const DashboardView = () => {
 
   return (
     <>
+      {/* Top stat cards use `stats` values. Show `...` while loading. */}
       <StatsGrid>
         <StatCard initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} color="#3b82f6">
           <StatLabel>Total Orders</StatLabel>
@@ -457,9 +506,9 @@ const DashboardView = () => {
           <StatTrend className="positive">Cumulative revenue</StatTrend>
         </StatCard>
         <StatCard initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} color="#f59e0b">
-          <StatLabel>Pending Tasks</StatLabel>
-          <StatValue>{loading ? '...' : Number(stats?.pendingTasks || 0)}</StatValue>
-          <StatTrend className="negative">Awaiting completion</StatTrend>
+          <StatLabel>Completed Orders</StatLabel>
+          <StatValue>{loading ? '...' : Number(stats?.completedOrders || 0).toLocaleString()}</StatValue>
+          <StatTrend className="positive">Successfully completed</StatTrend>
         </StatCard>
         <StatCard initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} color="#6366f1">
           <StatLabel>Pending Orders</StatLabel>
@@ -468,17 +517,20 @@ const DashboardView = () => {
         </StatCard>
       </StatsGrid>
 
+      {/* Recent Orders table: uses `recentOrders`. Handles loading + empty states. */}
       <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Recent Orders</h3>
         </div>
         {loading ? (
+          // While fetching show a centered loading placeholder
           <p style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '20px' }}>Loading...</p>
         ) : (
           <Table>
             <thead>
               <tr>
                 <th>Order ID</th>
+                <th>Order Date</th>
                 <th>Customer</th>
                 <th>Items</th>
                 <th>Amount</th>
@@ -487,10 +539,13 @@ const DashboardView = () => {
             </thead>
             <tbody>
               {recentOrders.length === 0 ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No orders yet</td></tr>
+                // Friendly empty state when no recent orders available
+                <tr><td colSpan="6" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No orders yet</td></tr>
               ) : recentOrders.map(order => (
+                // Each table row maps an order object from the API
                 <tr key={order.OrderID}>
                   <td>{order.OrderID}</td>
+                  <td>{order.OrderDate ? new Date(order.OrderDate).toLocaleString() : '—'}</td>
                   <td>{order.CustomerName}</td>
                   <td>{order.Items || '—'}</td>
                   <td>Rs. {Number(order.TotalPrice || 0).toLocaleString()}</td>
@@ -505,6 +560,7 @@ const DashboardView = () => {
   );
 };
 
+// Orders view: shows full orders table for management
 const OrdersView = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -560,6 +616,7 @@ const OrdersView = () => {
   );
 };
 
+// Staff view: lists staff members and their status
 const StaffView = () => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -602,6 +659,7 @@ const StaffView = () => {
   );
 };
 
+// Inventory view: lists current inventory levels and thresholds
 const InventoryView = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -667,6 +725,7 @@ const InventoryView = () => {
   );
 };
 
+// Allocate Task view: form to assign tasks to staff and list existing tasks
 const AllocateTaskView = () => {
   const [staffList, setStaffList] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -797,6 +856,7 @@ const AllocateTaskView = () => {
   );
 };
 
+// Stock Alerts view: shows low stock and other notifications for admin
 const StockAlertsView = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]= useState(true);
@@ -879,6 +939,7 @@ const StockAlertsView = () => {
   );
 };
 
+// Reports view: prepares exportable reports for customers, inventory and orders
 const ReportsView = () => {
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -985,6 +1046,12 @@ const ReportsView = () => {
     }
   };
 
+  // exportElementToPDF: captures a hidden DOM container with html2canvas
+  // and writes it to a multi-page PDF using jsPDF. Kept standalone so
+  // report-export containers can remain off-screen and the dashboard stays
+  // performant while exports are being generated.
+
+
   const exportCustomerReport = () => exportElementToPDF('report-export-customers', 'customers-report.pdf');
   const exportInventoryReport = () => exportElementToPDF('report-export-inventory', 'inventory-report.pdf');
   const exportOrderReport = () => exportElementToPDF('report-export-orders', 'orders-report.pdf');
@@ -1015,7 +1082,7 @@ const ReportsView = () => {
   });
   const customerStatsArr = Array.from(customerMap.entries()).map(([id, v]) => ({ id, ...v }));
   const returningCustomersCount = customerStatsArr.filter(c => c.count > 1).length;
-
+  // Helper: parse a value into a valid Date or return null when invalid
   const safeDate = (value) => {
     if (!value) return null;
     try {
@@ -1094,6 +1161,7 @@ const ReportsView = () => {
     if (diffDays <= 90) activeCustomerIds.add(o.CustomerID || o.CustomerName || 'Unknown');
   });
 
+  // Shorten long labels for charts/tables to keep layout tidy
   const truncateLabel = (value, max = 18) => {
     const s = String(value || '');
     if (s.length <= max) return s;
@@ -1110,6 +1178,7 @@ const ReportsView = () => {
     { label: 'Returning Customers', value: returningCustomersCount },
   ];
 
+  // Chart options used for PDF export (bar charts)
   const exportBarOptions = (titleText, xTitle, yTitle, overrides = {}) => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -1143,6 +1212,7 @@ const ReportsView = () => {
     },
   });
 
+  // Small helper to render summary stat cards used in exported reports
   const renderReportSummary = (items) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, margin: '14px 0 18px' }}>
       {items.map(x => (
@@ -1159,6 +1229,10 @@ const ReportsView = () => {
     // Individual report cards removed; using a single full PDF now
   ];
   void reportCards;
+
+  // `reportCards` is intentionally unused. We keep this placeholder so the
+  // dashboard can be extended later to support inline, card-based exports
+  // without changing the larger PDF export flow.
 
   return (
     <ContentCard initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1195,6 +1269,11 @@ const ReportsView = () => {
       </div>
 
       {/* Off-screen report-only containers (used for export). Keep them out of layout to avoid rendering cost in dashboard. */}
+      {/*
+        Off-screen report-only containers (used for export):
+        These large, printable sections are rendered off-screen so `html2canvas`/`jsPDF`
+        can capture them for PDF export without affecting dashboard performance.
+      */}
       <div style={{ position: 'absolute', left: -4000, top: 0 }}>
         {/* Customers Report */}
         <div id="report-export-customers" style={{ width: 1040, padding: 28, background: '#fff', color: '#000' }}>
@@ -1455,13 +1534,16 @@ const ReportsView = () => {
   );
 };
 
-// Main Component
+// Main component: renders the Admin layout, sidebar and switches views
+// - Manages `activeTab` (which view to show) and `sidebarOpen` for mobile
+// - `renderContent()` maps `activeTab` to the corresponding view component
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
+    // Clear session storage and send user back to public catalog
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('cart');

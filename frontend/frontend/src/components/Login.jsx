@@ -2,18 +2,25 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
+// Login component:
+// - Props: `setUser(user)` : callback to lift authenticated user into app state
+// - Submits `POST ${API_URL}/auth/login` with `{ email, password }`
+// - On success stores `token` and `user` in `localStorage`, calls `setUser`, then navigates to `/dashboard`
 const API_URL = 'http://localhost:5000/api';
 
 function Login({ setUser }) {
   const navigate = useNavigate();
+  // `formData` holds controlled input values for the login form
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
+  // `error` shows server/validation messages; `loading` disables the form while request runs
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    // Update the named field in formData (works for inputs with `name` attr)
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -22,12 +29,15 @@ function Login({ setUser }) {
     setError('');
     setLoading(true);
     try {
+      // Send credentials to backend; expect `{ token, user }` on success
       const response = await axios.post(`${API_URL}/auth/login`, formData);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      // Lift authenticated user to parent context and navigate to protected area
       setUser(response.data.user);
       navigate('/dashboard');
     } catch (err) {
+      // Show server error message if available, otherwise a generic message
       setError(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);

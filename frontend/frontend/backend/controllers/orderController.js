@@ -1,8 +1,25 @@
 const db = require('../config/db');
 const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../utils/idGenerator');
 
+// Module purpose: order management endpoints used by admin/staff and customers.
+// Includes utilities to normalize incoming item payloads and handlers to
+// list orders, view order details, and create new orders transactionally.
+
+// Max allowed quantity per single item to avoid accidental huge orders
 const MAX_ORDER_QUANTITY = 50;
 
+// normalizeOrderItems(body)
+// Purpose: accept multiple shapes of incoming order data and produce a
+// sanitized, de-duplicated list of { productId, quantity } items or an
+// { error } object when validation fails.
+// Behavior:
+// - If `body.items` is an array, use it. Otherwise, accept fallback
+//   `productId` and `quantity` (legacy single-item payload).
+// - Validate each item: productId must be non-empty, quantity must be a
+//   positive finite number, and quantity must not exceed MAX_ORDER_QUANTITY.
+// - Merge quantities by productId (sum duplicates) and return `{ items }`.
+// - Return `{ error }` for any validation failure so callers can respond
+//   with a 400 Bad Request.
 const normalizeOrderItems = (body) => {
   const rawItems = Array.isArray(body?.items) ? body.items : [];
   const fallbackProductId = body?.productId;
@@ -20,6 +37,7 @@ const normalizeOrderItems = (body) => {
     const productId = String(item?.productId || '').trim();
     const quantity = Number(item?.quantity);
 
+    // Basic per-item validation
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
       return { error: 'Each item must include a valid productId and positive quantity' };
     }
@@ -28,6 +46,7 @@ const normalizeOrderItems = (body) => {
       return { error: `Quantity cannot exceed ${MAX_ORDER_QUANTITY} per item` };
     }
 
+    // Accumulate/merge duplicate product entries by summing quantities
     mergedByProduct.set(productId, (mergedByProduct.get(productId) || 0) + quantity);
   }
 
@@ -40,6 +59,9 @@ const normalizeOrderItems = (body) => {
 };
 
 // GET /api/orders — all orders with customer name, items, totals (admin/staff)
+// Purpose: list all orders with aggregated totals and a simple 'Items' text
+// summary. Intended for admin/staff reporting UI. Uses LEFT JOINs to include
+// customers and related order items; GROUP BY to build aggregates.
 exports.getAllOrders = async (req, res) => {
   try {
     const [orders] = await db.query(`
@@ -65,7 +87,10 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
-// GET /api/orders/my — all orders for the logged-in customer
+// GET /api/orders/my — list orders belonging to the authenticated customer
+// Behavior: verifies the requester is a `customer` role, then returns the
+// same aggregated view as `getAllOrders` but restricted to the customer's
+// own orders. Returns 403 for non-customers.
 exports.getMyOrders = async (req, res) => {
   try {
     const user = req.user;
@@ -99,7 +124,11 @@ exports.getMyOrders = async (req, res) => {
   }
 };
 
-// GET /api/orders/:orderId — detailed order summary for the logged-in customer
+// GET /api/orders/:orderId — detailed order summary for the authenticated customer
+// Behavior: verifies the user is a `customer`, then retrieves a single
+// order with aggregated line-item totals, a simple Items string, any
+// advance payments, and the most recent 'Order Update' notification time.
+// Returns 404 if the order does not exist or does not belong to the user.
 exports.getOrderById = async (req, res) => {
   try {
     const user = req.user;
@@ -166,7 +195,15 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-// POST /api/orders — create a new order for the logged-in customer
+// POST /api/orders — create a new order for the authenticated customer
+// Summary of steps performed:
+// 1. Ensure requester is a `customer`.
+// 2. Normalize and validate incoming item payloads (supports items[] or legacy productId/quantity).
+// 3. Fetch product prices for the requested product IDs and verify all exist.
+// 4. Build line items, compute total and advance (40%).
+// 5. Start a DB transaction, insert the `orders` row, insert `orderitem` rows,
+//    create a `payment` record for the advance, commit the transaction.
+// 6. On error, rollback and return 500.
 exports.createOrder = async (req, res) => {
   let conn;
   try {

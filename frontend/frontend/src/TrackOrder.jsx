@@ -276,6 +276,10 @@ const StatusBadge = styled.span`
 const TrackOrder = () => {
   const navigate = useNavigate();
   const [orderId, setOrderId] = useState('');
+  // `trackedOrder` - populated when an order ID is successfully fetched
+  // `notifications` - recent user notifications shown in the panel
+  // `trackError` - user-facing error for lookup failures
+  // `searching` - UI loading flag while the order lookup is in progress
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [trackError, setTrackError] = useState(null);
@@ -285,6 +289,9 @@ const TrackOrder = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
+    // Fetch latest notifications for the authenticated user and normalize
+    // them into a compact shape for display. We limit to the first 50 items
+    // to avoid overwhelming the UI.
     fetch('http://localhost:5000/api/notifications', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -315,6 +322,8 @@ const TrackOrder = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) { navigate('/login'); return; }
+      // Lookup order by ID using authenticated API. On success transform the
+      // server payload into `trackedOrder` used by the ResultTable below.
       const res = await fetch(`http://localhost:5000/api/orders/${orderId.trim()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -374,6 +383,7 @@ const TrackOrder = () => {
         </Header>
 
         <ContentGrid>
+          {/* Left card: Notification Center (recent user notifications) */}
           <GlassCard
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -417,6 +427,7 @@ const TrackOrder = () => {
             </NotifList>
           </GlassCard>
 
+          {/* Right card: Order lookup form and result table */}
           <GlassCard
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -441,12 +452,14 @@ const TrackOrder = () => {
               </SearchBtn>
             </SearchForm>
 
+            {/* Show lookup error when present */}
             {trackError && (
               <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '15px', padding: '10px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
                 {trackError}
               </div>
             )}
 
+            {/* Display the most recently fetched order or an instruction/empty state */}
             <ResultTable>
               <thead>
                 <tr>

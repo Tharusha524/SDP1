@@ -3,6 +3,12 @@ import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBoxes, FaCheckCircle } from 'react-icons/fa';
 
+// Inventory allocation screen (admin/staff).
+// - Loads orders from the backend
+// - Lets the user enter raw-material allocations per order
+// - Sends allocations to the backend and shows a success toast
+// - Also loads previously saved allocation summaries for reference
+
 // --- Styled Components ---
 
 const Container = styled.div`
@@ -198,16 +204,25 @@ const SearchInput = styled(Input)`
 `;
 
 const HandleInventory = () => {
+  // UI/feedback state
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Data state
   const [allocatedData, setAllocatedData] = useState(null);
   const [orders, setOrders] = useState([]);
+
+  // Loading/error state for initial load and actions
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Client-side search filter (Order ID)
   const [orderSearch, setOrderSearch] = useState('');
 
+  // Backend base URL used for all fetch calls in this component.
   const API_BASE = 'http://localhost:5000';
 
   useEffect(() => {
+    // Guard: this page requires a JWT token in localStorage.
     const token = localStorage.getItem('token');
     if (!token) {
       setError('Please log in as admin or staff to handle inventory.');
@@ -222,6 +237,8 @@ const HandleInventory = () => {
       .then(r => r.json())
       .then(data => {
         if (data.success && Array.isArray(data.orders)) {
+          // Normalize backend orders into a UI-friendly shape.
+          // The allocation fields (cement/sand/stone) start empty so the user can type them.
           const mapped = data.orders.map(o => ({
             id: o.OrderID,
             customer: o.CustomerName || 'Unknown',
@@ -252,6 +269,7 @@ const HandleInventory = () => {
       });
   }, []);
 
+  // Updates the allocation input fields for a specific order row.
   const handleInputChange = (orderId, field, value) => {
     // Prevent negative values
     if (value < 0) return;
@@ -261,7 +279,10 @@ const HandleInventory = () => {
     ));
   };
 
+  // Search term normalized for case-insensitive matching.
   const normalizedSearch = orderSearch.trim().toLowerCase();
+
+  // Filtered views used by both tables, based on Order ID.
   const filteredOrders = normalizedSearch
     ? orders.filter(order => String(order.id).toLowerCase().includes(normalizedSearch))
     : orders;
@@ -270,6 +291,8 @@ const HandleInventory = () => {
     ? allocatedData.filter(row => String(row.OrderID || row.id).toLowerCase().includes(normalizedSearch))
     : allocatedData;
 
+  // Sends the entered allocations to the backend (POST /api/inventory/allocate).
+  // Validates that at least one allocation is entered and that values are >= 1.
   const handleAllocate = () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -277,6 +300,7 @@ const HandleInventory = () => {
       return;
     }
 
+    // Validation: if a field is filled, it must be a number >= 1.
     const hasInvalidEnteredValue = orders.some(o => {
       const fields = ['cement', 'sand', 'stone'];
       return fields.some(field => {
@@ -292,6 +316,7 @@ const HandleInventory = () => {
       return;
     }
 
+    // Only send rows where at least one allocation was entered.
     const meaningful = orders.filter(o =>
       (o.cement && parseInt(o.cement || '0', 10) > 0) ||
       (o.sand && parseInt(o.sand || '0', 10) > 0) ||
@@ -303,6 +328,7 @@ const HandleInventory = () => {
       return;
     }
 
+    // Payload format expected by the backend.
     const payload = {
       allocations: meaningful.map(o => ({
         orderId: o.id,
@@ -328,6 +354,8 @@ const HandleInventory = () => {
             setAllocatedData(data.allocations);
           }
           setError('');
+
+          // Temporary toast-like success message.
           setShowSuccess(true);
           setTimeout(() => setShowSuccess(false), 3000);
         } else {
@@ -341,6 +369,7 @@ const HandleInventory = () => {
     <Container>
       <AnimatePresence>
         {showSuccess && (
+          // Success toast anchored at the top-right.
           <SuccessMessage
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -398,6 +427,7 @@ const HandleInventory = () => {
         <SectionTitle>Allocate Raw Materials</SectionTitle>
         <SearchRow>
           <SearchLabel>Search by Order ID</SearchLabel>
+          {/* Filters both the allocation inputs and the summary table below */}
           <SearchInput
             type="text"
             placeholder="Enter Order ID..."

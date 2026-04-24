@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
+// Register component notes:
+// - Sends `POST ${API_URL}/auth/register` with form data { name, email, password, role, contactNo, address }
+// - On success navigates user to `/verify-email` and passes the email in navigation state
 const API_URL = 'http://localhost:5000/api';
 
 function Register() {
   const navigate = useNavigate();
+  // Controlled form state for registration fields
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,10 +19,12 @@ function Register() {
     contactNo: '',
     address: ''
   });
+  // `error` shows server or validation errors; `loading` disables the form while request runs
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    // Generic handler: updates the field named by the input's `name` attribute
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -31,10 +37,13 @@ function Register() {
     }
     setLoading(true);
     try {
+      // Submit registration to backend. Backend should return success or error message.
       await axios.post(`${API_URL}/auth/register`, formData);
       alert('Registration successful! Redirecting to verification...');
+      // Navigate to email verification screen, passing email for convenience
       setTimeout(() => navigate('/verify-email', { state: { email: formData.email } }), 1000);
     } catch (err) {
+      // Display backend-provided message when available
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);

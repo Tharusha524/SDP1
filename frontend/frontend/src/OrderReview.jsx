@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
+// Order review page shown after a customer places an order (or follows a payment callback).
+// Responsibilities:
+// - Load order details from `/api/orders/:orderId` using the stored JWT token
+// - If the order record is missing (payment succeeded but backend finalization didn't run),
+//   attempt a one-time `POST /api/payments/finalize` then retry loading the order
+// - Render order summary and provide navigation to catalog or tracking
+
 const OrderReview = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -10,6 +17,9 @@ const OrderReview = () => {
   const attemptedFinalizeRef = useRef(false);
 
   useEffect(() => {
+    // Fetch order details and handle the race where payment succeeded but order record
+    // hasn't been created yet by the backend. We only try the `finalize` endpoint once
+    // to avoid repeated side-effects.
     const fetchOrder = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -27,8 +37,8 @@ const OrderReview = () => {
 
         let { res, data } = await fetchOrderDetails();
 
-        // If the order isn't created yet (common when PayHere payment succeeded
-        // but the finalize call didn't run), attempt to finalize once and retry.
+        // If the order isn't found, we attempt a one-time finalize call (PayHere flow)
+        // then re-fetch the order details. `attemptedFinalizeRef` prevents looping.
         if (
           !data?.success &&
           !attemptedFinalizeRef.current &&
@@ -48,6 +58,7 @@ const OrderReview = () => {
           ({ res, data } = await fetchOrderDetails());
         }
 
+        // Update UI state based on fetch result
         if (data?.success) {
           setOrder(data.order);
           setError(null);
@@ -66,6 +77,7 @@ const OrderReview = () => {
   }, [orderId, navigate]);
 
   if (loading) {
+    // Show a full-page loading placeholder while the order is being fetched
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617', color: '#e5e7eb' }}>Loading order...</div>;
   }
 
@@ -92,6 +104,7 @@ const OrderReview = () => {
         <div style={{ marginBottom: '8px' }}><strong>Status:</strong> {order.Status}</div>
         <div style={{ marginBottom: '8px' }}><strong>Placed on:</strong> {new Date(order.OrderDate || order.CreatedAt).toLocaleString()}</div>
         {order.Items && (
+          // Show ordered items if the backend provided the string/summary
           <div style={{ marginBottom: '8px' }}><strong>Items:</strong> {order.Items}</div>
         )}
         <div style={{ marginBottom: '8px' }}><strong>Total quantity:</strong> {order.TotalQuantity}</div>

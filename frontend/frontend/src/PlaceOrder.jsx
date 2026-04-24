@@ -234,6 +234,11 @@ const PlaceOrder = () => {
     catch { return ''; }
   })();
 
+  // Page responsibilities:
+  // - Let customer select one or more products + quantities
+  // - Calculate total price and 40% advance amount client-side
+  // - Validate inputs and then navigate to the payment checkout route with session state
+
   // Fetch real products from DB on mount (used for price lookup)
   useEffect(() => {
     fetch('http://localhost:5000/api/products')
@@ -300,6 +305,7 @@ const PlaceOrder = () => {
     const token = localStorage.getItem('token');
     if (!token) { navigate('/login'); return; }
 
+    // Basic validation: require at least one item and valid quantities
     if (!orderItems.length) {
       setError('Add at least one product item.');
       return;
@@ -319,6 +325,7 @@ const PlaceOrder = () => {
       return;
     }
 
+    // Build a user-friendly product name summary for the payment screen
     const displayNames = orderItems
       .map((item) => products.find((p) => p.ProductID === item.productId)?.Name)
       .filter(Boolean);

@@ -155,7 +155,11 @@ const ResetPassword = () => {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
     };
 
-    const [step, setStep] = useState(1); // 1: OTP, 2: New Password
+    // Simple validator to confirm the email format passed from the previous
+    // page before allowing the user to proceed with reset steps.
+
+    // `step` controls the UI: 1 = enter OTP, 2 = set new password
+    const [step, setStep] = useState(1);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -167,6 +171,9 @@ const ResetPassword = () => {
     const inputRefs = useRef([]);
 
     useEffect(() => {
+        // Guard: if no email was provided in navigation state, redirect user
+        // back to login. If email exists but is malformed, send back to
+        // forgot-password so they can re-initiate the flow.
         if (!email) {
             navigate('/login');
             return;
@@ -178,6 +185,8 @@ const ResetPassword = () => {
     }, [email, navigate]);
 
     const handleOtpChange = (index, value) => {
+        // Accept only digits. Update the OTP array and auto-focus the next
+        // input when the user types a digit. Clear any existing error on edit.
         if (!/^\d*$/.test(value)) return;
         const newOtp = [...otp];
         newOtp[index] = value;
@@ -187,6 +196,7 @@ const ResetPassword = () => {
     };
 
     const handleOtpKeyDown = (index, e) => {
+        // Allow backspace navigation to previous input when current is empty.
         if (e.key === 'Backspace' && !otp[index] && index > 0) {
             inputRefs.current[index - 1]?.focus();
         }
@@ -199,6 +209,8 @@ const ResetPassword = () => {
         setLoading(true);
         setError('');
         try {
+            // Send the joined OTP to backend for verification. On success we
+            // advance to the password reset step.
             const res = await fetch('http://localhost:5000/api/auth/verify-reset-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -218,6 +230,7 @@ const ResetPassword = () => {
     };
 
     const validatePassword = (pwd) => {
+        // Return an error string when password fails requirements otherwise ''
         if (!pwd) return 'Password is required';
         if (pwd.length < 8) return 'Password must be at least 8 characters';
         const complexity = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/;
@@ -226,6 +239,9 @@ const ResetPassword = () => {
     };
 
     const handleReset = async () => {
+        // Finalize password reset: validate password complexity and match,
+        // then POST new password and OTP to backend. On success show a
+        // confirmation and navigate back to login.
         const pwdErr = validatePassword(password);
         if (pwdErr) {
             setPasswordError(pwdErr);
@@ -268,6 +284,8 @@ const ResetPassword = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
                 >
+                    {/* Top-level rendering: show a success confirmation, the OTP
+                        entry step, or the new-password step depending on `step`. */}
                     {success ? (
                         <>
                             <IconWrapper $success initial={{ scale: 0 }} animate={{ scale: 1 }}>

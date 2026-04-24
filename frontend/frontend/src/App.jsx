@@ -1,54 +1,85 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import Login from './components/Login';
-import Register from './components/Register';
-import Dashboard from './components/Dashboard';
-import CustomerProfile from './CustomerProfile.jsx';
-import VerifyEmail from './VerifyEmail.jsx';
-import ResetPassword from './ResetPassword.jsx';
-import ForgotPassword from './ForgotPassword.js';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import LoginPage from "./LoginPage.jsx";
+import Register from "./Register.jsx";
+import VerifyEmail from "./VerifyEmail.jsx";
+import ResetPassword from "./ResetPassword.jsx";
+import LandingPage from "./LandingPage.jsx";
+import ForgotPassword from "./ForgotPassword.jsx";
+import PlaceOrder from "./PlaceOrder.jsx";
+import TrackOrder from "./TrackOrder.jsx";
+import CustomerProfile from "./CustomerProfile.jsx";
+import AboutUs from "./AboutUs.jsx";
+import ContactUs from "./ContactUs.jsx";
+import CatalogForAdmin from "./CatalogForAdmin.jsx";
+import CatalogManage from "./CatalogManage.jsx";
+import InventoryTracker from "./InventoryTracker.jsx";
+import StaffTasks from "./StaffTasks.jsx";
+import HandleInventory from "./HandleInventory.jsx";
+import AdminDashboard from "./AdminDashboard.jsx";
+import CatalogForStaff from "./CatalogForStaff.jsx";
+import CatalogForCustomer from "./CatalogForCustomer.jsx";
+import Cart from './Cart.jsx';
+import PaymentResult from "./PaymentResult";
+import OrderReview from "./OrderReview";
+import PaymentCheckout from "./PaymentCheckout.jsx";
 
-function App() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    if (token && userData) {
-      setUser(JSON.parse(userData));
-    }
-  }, []);
-
-  const ProtectedRoute = ({ children }) => {
-    return user ? children : <Navigate to="/login" />;
-  };
+function AnimatedRoutes() {
+  const location = useLocation();
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login setUser={setUser} />} />
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Authentication */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard user={user} setUser={setUser} />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/customer/profile"
-          element={
-            <ProtectedRoute>
-              <CustomerProfile user={user} />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/" element={<Navigate to="/login" />} />
+
+        {/* Public Catalog (accessible without login) */}
+        <Route path="/catalog" element={<CatalogForCustomer />} />
+
+        {/* Customer Journey */}
+        <Route path="/customer/catalog" element={<CatalogForCustomer />} />
+        <Route path="/customer/cart" element={<Cart />} />
+        <Route path="/customer/place-order" element={<PlaceOrder />} />
+        <Route path="/customer/payment" element={<PaymentCheckout />} />
+        <Route path="/customer/track-order" element={<TrackOrder />} />
+        <Route path="/customer/profile" element={<CustomerProfile />} />
+        <Route path="/customer/order/:orderId" element={<OrderReview />} />
+        <Route path="/about" element={<AboutUs />} />
+        <Route path="/contact" element={<ContactUs />} />
+
+        {/* Payment results (PayHere sandbox) */}
+        <Route path="/payment-success" element={<PaymentResult success={true} />} />
+        <Route path="/payment-failed" element={<PaymentResult success={false} />} />
+
+        {/* Admin Management */}
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/orders" element={<CatalogForAdmin />} />
+        <Route path="/admin/catalog-manage" element={<CatalogManage />} />
+        <Route path="/admin/inventory" element={<HandleInventory />} />
+        <Route path="/admin/inventory-tracker" element={<InventoryTracker />} />
+
+        {/* Staff Operations */}
+        <Route path="/staff/tasks" element={<StaffTasks />} />
+        <Route path="/staff/catalog" element={<CatalogForStaff />} />
+
+        {/* Storekeeper Inventory */}
+        {/* <Route path="/storekeeper/inventory" element={<HandleInventory />} /> */}
+        <Route path="/storekeeper/inventory-tracker" element={<InventoryTracker />} />
       </Routes>
+    </AnimatePresence>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AnimatedRoutes />
     </Router>
   );
 }

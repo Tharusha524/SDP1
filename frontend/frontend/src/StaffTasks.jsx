@@ -289,6 +289,12 @@ const SubmitButton = styled(motion.button)`
 
 export default function StaffTasks() {
   const navigate = useNavigate();
+  // Component state
+  // `tasks` - list of assigned tasks for this staff member
+  // `loading` - true while initial fetch is in progress
+  // `orders` - list of orders for overview and status updates
+  // `orderId`, `orderStatus`, `estimatedDate` - form state for updating an order
+  // `notification` - transient UI feedback after actions
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -299,7 +305,8 @@ export default function StaffTasks() {
   const token = localStorage.getItem('token');
   const authHeader = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // Load real tasks for this staff member from DB
+  // Load tasks and orders on mount. Guards for missing token redirect to login.
+  // Uses `authHeader` so backend can authenticate the staff member.
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
     fetch('http://localhost:5000/api/staff/tasks', { headers: authHeader })
@@ -323,6 +330,7 @@ export default function StaffTasks() {
     navigate('/catalog');
   };
 
+  // Mark a task as completed: PATCH the task on the server and update local state
   const markComplete = async (taskId) => {
     try {
       const res = await fetch(`http://localhost:5000/api/staff/tasks/${taskId}/complete`, {
@@ -331,6 +339,7 @@ export default function StaffTasks() {
       });
       const data = await res.json();
       if (data.success) {
+        // Optimistically update the local `tasks` list to show completion
         setTasks(prev => prev.map(t => t.TaskID === taskId ? { ...t, Status: 'Completed' } : t));
       }
     } catch {}
@@ -338,6 +347,8 @@ export default function StaffTasks() {
 
   const [estimatedDate, setEstimatedDate] = useState('');
 
+  // Submit an order status update: PATCH order status and show a notification.
+  // Keeps the UI responsive by clearing inputs on success and showing errors on failure.
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderId.trim() || !orderStatus) return;

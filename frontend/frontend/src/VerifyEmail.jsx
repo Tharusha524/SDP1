@@ -154,6 +154,12 @@ const VerifyEmail = () => {
   const location = useLocation();
   const email = location.state?.email || '';
   
+  // Form/UI state
+  // `otp` - array of six input digits
+  // `loading` - true while verify/resend network calls are in progress
+  // `error` - user-facing error message for verification/resend failures
+  // `success` - true when verification succeeds (shows confirmation)
+  // `resendDisabled` / `resendTimer` - control cooldown for resending OTP
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -164,6 +170,8 @@ const VerifyEmail = () => {
   const inputRefs = useRef([]);
 
   useEffect(() => {
+    // If this page was opened without an `email` in navigation state,
+    // send the user back to register so they can re-initiate verification.
     if (!email) {
       navigate('/register');
     }
@@ -179,13 +187,15 @@ const VerifyEmail = () => {
   }, [resendTimer]);
 
   const handleChange = (index, value) => {
+    // Accept only numeric input, update the digit array, clear errors,
+    // and auto-focus the next input when appropriate.
     if (!/^\d*$/.test(value)) return; // Only allow digits
-    
+
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
     setError('');
-    
+
     // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
@@ -200,14 +210,16 @@ const VerifyEmail = () => {
   };
 
   const handlePaste = (e) => {
+    // Allow pasting a full code: normalize to first 6 digits and populate
+    // the inputs for quick verification.
     e.preventDefault();
     const pastedData = e.clipboardData.getData('text').slice(0, 6);
     if (!/^\d+$/.test(pastedData)) return; // Only allow digits
-    
+
     const newOtp = pastedData.split('');
     while (newOtp.length < 6) newOtp.push('');
     setOtp(newOtp);
-    
+
     // Focus last filled input or last input
     const lastIndex = Math.min(pastedData.length, 5);
     inputRefs.current[lastIndex]?.focus();
@@ -221,6 +233,8 @@ const VerifyEmail = () => {
       return;
     }
     
+    // Send OTP to backend for verification. On success show confirmation
+    // and redirect to login. Errors are surfaced to the user.
     setLoading(true);
     setError('');
 
@@ -250,6 +264,7 @@ const VerifyEmail = () => {
   };
 
   const handleResend = async () => {
+    // Trigger resend flow and start a cooldown timer to prevent abuse.
     setResendDisabled(true);
     setResendTimer(60); // 60 seconds cooldown
     setOtp(['', '', '', '', '', '']);

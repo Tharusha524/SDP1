@@ -5,6 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { FaArrowRight } from 'react-icons/fa';
 import heroBg from './assets/Gemini_Generated_Image_iqq5q5iqq5q5iqq5.png';
 
+// Public landing page.
+// - Static marketing/intro page (no API calls)
+// - Provides navigation to the main catalog
+// - Includes a smooth-scroll indicator that jumps to the “features” section
+
 // --- Global Fonts & Reset for Landing Page ---
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -274,6 +279,7 @@ const Footer = styled.footer`
 const LandingPage = () => {
   const navigate = useNavigate();
 
+  // Scrolls the page to the features section.
   const handleScroll = () => {
     const section = document.getElementById('features');
     if (section) {
@@ -283,16 +289,20 @@ const LandingPage = () => {
 
   return (
     <>
+      {/* Page-level global style overrides for this landing view */}
       <GlobalStyle />
       <Container>
+        {/* Top navigation bar (logo only) */}
         <Navbar
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
+          {/* Clicking the logo navigates to the home route */}
           <Logo onClick={() => navigate('/')}>Marukawa</Logo>
         </Navbar>
 
+        {/* Full-screen hero section with background image */}
         <Hero>
           <HeroBg />
           <HeroContent>
@@ -324,12 +334,14 @@ const LandingPage = () => {
               transition={{ duration: 0.8, delay: 1.1 }}
               style={{ marginTop: '40px' }}
             >
+              {/* Primary CTA: enter the app */}
               <BookButton onClick={() => navigate('/catalog')}>
                 Get Started
               </BookButton>
             </motion.div>
           </HeroContent>
 
+          {/* Smooth-scroll hint to jump down to the features cards */}
           <ScrollIndicator
             onClick={handleScroll}
             initial={{ opacity: 0 }}
@@ -341,6 +353,7 @@ const LandingPage = () => {
           </ScrollIndicator>
         </Hero>
 
+        {/* Feature cards section */}
         <Section id="features">
           <Grid>
             <Card

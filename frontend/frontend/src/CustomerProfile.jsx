@@ -3,12 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 
+// CustomerProfile.jsx
+// Page for authenticated customers to view their profile and order history.
+// Responsibilities:
+// - Ensure the user is authenticated and has the `customer` role.
+// - Fetch profile and order data from the API using the stored token.
+// - Compute simple summary metrics (total orders, pending count, total spent).
+// - Render a compact profile card and a clickable order history table.
+// Comments below annotate each logical paragraph (auth, fetch, UI sections).
+
 const Page = styled.div`
   min-height: 100vh;
   background: radial-gradient(circle at top left, #1a1a1a, #0b0b0f);
   color: #f3f4f6;
   font-family: 'Manrope', sans-serif;
 `;
+
+// Styled components: layout primitives and visual building blocks used by
+// the Customer Profile page (TopBar, Cards, Avatar, Metrics, Orders table).
+// Keeping these grouped near the top makes it easy to adjust visuals
+// without changing the component logic below.
 
 const TopBar = styled.header`
   padding: 24px 6%;
@@ -115,7 +129,7 @@ const Greeting = styled.div`
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.75);
+  color: rgba(240, 230, 226, 0.75);
 `;
 
 const PrimaryName = styled.div`
@@ -142,7 +156,7 @@ const MetricLabel = styled.div`
   font-size: 0.7rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(148, 182, 184, 0.9);
   margin-bottom: 4px;
 `;
 
@@ -263,6 +277,11 @@ function CustomerProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Authentication & data-loading effect:
+  // - Reads `user` and `token` from localStorage.
+  // - Redirects to `/login` when no valid session exists.
+  // - Ensures the logged-in user has the `customer` role.
+  // - Fetches both profile and orders in parallel and handles errors.
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
@@ -323,6 +342,12 @@ function CustomerProfile() {
     fetchData();
   }, [navigate]);
 
+  // Derived display values and small UI helpers:
+  // `displayName` chooses the best available name for the avatar/title.
+  // `initials` is derived from the display name for the avatar circle.
+  // `totalOrders`, `totalSpent`, and `pendingCount` are lightweight
+  // aggregates used in the Order History summary cards below.
+
   const displayName = profile?.Name || user?.name || 'Customer';
   const initials = displayName
     .split(' ')
@@ -347,6 +372,9 @@ function CustomerProfile() {
     return (
       <MessageWrapper>
         <div>
+          {/* Error state: show a friendly message and a back button so the
+              user can return to the public catalog. This keeps the UI
+              recoverable when the API is unreachable or returns an error. */}
           <p style={{ marginBottom: '12px', color: '#fecaca' }}>{error}</p>
           <BackButton onClick={() => navigate('/customer/catalog')}>Back to Catalog</BackButton>
         </div>
@@ -361,6 +389,8 @@ function CustomerProfile() {
         <BackButton onClick={() => navigate('/customer/catalog')}>Back to Catalog</BackButton>
       </TopBar>
 
+      {/* Main content: two-column layout with Customer Details (left) and
+          Order History (right). Cards animate into view for a polished feel. */}
       <Content>
         <Card
           initial={{ opacity: 0, y: 12 }}
@@ -407,6 +437,9 @@ function CustomerProfile() {
           transition={{ duration: 0.3, delay: 0.05 }}
         >
           <CardTitle>Order History</CardTitle>
+          {/* Order History: shows simple metrics when orders exist and a
+              paginated / clickable table of past orders. Clicking a row
+              navigates to the order detail view for that order. */}
           {orders.length > 0 && (
             <MetricsRow>
               <MetricCard>

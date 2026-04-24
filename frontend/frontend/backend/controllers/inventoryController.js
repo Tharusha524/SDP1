@@ -1,8 +1,14 @@
+// Purpose: inventoryController
+// This file handles inventory-related API endpoints used by the admin UI.
+// It lets admins view current stock, update quantities, and create
+// inventory allocations for orders.
 const db = require('../config/db');
 const { generateNotificationId, generateId } = require('../utils/idGenerator');
 
+// Handler: get inventory list
+// Simple: return current inventory rows (name, available qty, threshold).
+// Used by admin pages to show stock levels.
 // GET /api/inventory
-// Returns the three core raw-material inventory rows (cement, sand, stone powder)
 exports.getInventory = async (req, res) => {
   try {
     const [inventory] = await db.query(`
@@ -21,6 +27,10 @@ exports.getInventory = async (req, res) => {
   }
 };
 
+// Handler: update a single inventory item quantity
+// - Validates the provided quantity
+// - Updates the inventory row and sets UpdatedBy and LastUpdated
+// - If new qty <= threshold, creates a low-stock notification
 // PATCH /api/inventory/:id
 exports.updateInventoryItem = async (req, res) => {
   const qty = parseInt(req.body.quantity);
@@ -61,7 +71,9 @@ exports.updateInventoryItem = async (req, res) => {
   }
 };
 
-// Helper: generate AllocationID like RA-0001
+// Helper: generateAllocationId
+// Returns a new AllocationID string (RA-xxxx). Keeps IDs sequential
+// by checking existing AllocationIDs in the DB, fallback to random.
 const generateAllocationId = async () => {
   try {
     const [rows] = await db.query('SELECT AllocationID FROM inventory_allocation ORDER BY AllocationID DESC LIMIT 100');
@@ -73,7 +85,8 @@ const generateAllocationId = async () => {
   }
 };
 
-// Helper: generate AllocationItemID like RAI-0001
+// Helper: generateAllocationItemId
+// Same idea as generateAllocationId but for allocation item rows (RAI-xxxx).
 const generateAllocationItemId = async () => {
   try {
     const [rows] = await db.query('SELECT AllocationItemID FROM inventory_allocation_item ORDER BY AllocationItemID DESC LIMIT 100');
@@ -85,6 +98,9 @@ const generateAllocationItemId = async () => {
   }
 };
 
+// Helper: buildAllocationSelectQuery
+// Builds the SQL used to return a summarized view of inventory allocations
+// (one row per allocation with a short text summary of materials).
 const buildAllocationSelectQuery = () => `
       SELECT ia.AllocationID,
              ia.OrderID,
@@ -114,8 +130,11 @@ const buildAllocationSelectQuery = () => `
       ORDER BY ia.UpdatedAt DESC
     `;
 
+// Handler: allocate inventory for orders (bulk)
+// - Input: array of allocations { orderId, cement, sand, stone }
+// - For each allocation: create/update inventory_allocation and items
+// - Returns saved allocation summaries for the admin UI
 // POST /api/inventory/allocate
-// Body: { allocations: [ { orderId, cement, sand, stone } ] }
 exports.allocateInventorySummary = async (req, res) => {
   const { allocations } = req.body || {};
   if (!Array.isArray(allocations) || allocations.length === 0) {
@@ -203,8 +222,9 @@ exports.allocateInventorySummary = async (req, res) => {
   }
 };
 
+// Handler: list inventory allocations
+// - Returns summarized allocation rows for admin history and review
 // GET /api/inventory/allocations
-// Returns all allocated inventory summaries so admin can always see history
 exports.getInventoryAllocations = async (req, res) => {
   try {
     const [rows] = await db.query(buildAllocationSelectQuery());

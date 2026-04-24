@@ -10,6 +10,11 @@ import img5 from './assets/Gemini_Generated_Image_elt1ngelt1ngelt1.png';
 import img7 from './assets/Gemini_Generated_Image_qoa691qoa691qoa6.png';
 import img8 from './assets/register-hero.png';
 
+// Admin-only catalog page.
+// - Fetches products from the backend and shows them in a card grid
+// - Provides quick navigation to the admin catalog management screen
+// - Allows deleting a product via the backend DELETE endpoint
+
 // --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
@@ -159,7 +164,7 @@ const NavLink = styled.button`
   font-size: 0.9rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.7);
+  color: rgba(200, 155, 65, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -335,12 +340,19 @@ const ButtonGroup = styled.div`
 
 const CatalogForAdmin = () => {
   const navigate = useNavigate();
+
+  // UI state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Data state
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Only allow admins here and load real products from backend
+  // Page guard + initial data load:
+  // - Reads the logged-in user from localStorage
+  // - Redirects away if not logged in or not an admin
+  // - Loads products from the backend
   React.useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
@@ -361,6 +373,7 @@ const CatalogForAdmin = () => {
       return;
     }
 
+    // Fetch the product list used to render the grid.
     const fetchProducts = async () => {
       setLoading(true);
       try {
@@ -382,10 +395,13 @@ const CatalogForAdmin = () => {
     fetchProducts();
   }, [navigate]);
 
+  // Deletes a product from the backend, then removes it from local state
+  // so the UI updates immediately without a refetch.
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to remove this product from the catalog?")) return;
 
     try {
+      // If the backend enforces auth on DELETE, send the token when present.
       const token = localStorage.getItem('token');
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -408,6 +424,10 @@ const CatalogForAdmin = () => {
     }
   };
 
+  // Picks the best display image for the product:
+  // - If the backend provides a usable URL/data URI, use it directly
+  // - Otherwise map known filenames to bundled images
+  // - Fall back to a default image
   const getProductImage = (product) => {
     if (product.Image) {
       if (typeof product.Image === 'string' && (product.Image.startsWith('data:') || product.Image.startsWith('http'))) {
@@ -427,6 +447,7 @@ const CatalogForAdmin = () => {
     return img1;
   };
 
+  // Client-side search filter over the already-fetched products.
   const filteredProducts = products.filter(p => {
     const name = (p.Name || '').toLowerCase();
     const desc = (p.Description || '').toLowerCase();
@@ -441,11 +462,16 @@ const CatalogForAdmin = () => {
         <AnimatePresence>
           {isSidebarOpen && (
             <>
+              {/* Clickable overlay to close the sidebar on mobile */}
               <SidebarOverlay onClick={() => setIsSidebarOpen(false)} />
               <Sidebar initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}>
                 <SidebarCloseBtn onClick={() => setIsSidebarOpen(false)}><FaTimes /></SidebarCloseBtn>
+
+                {/* Admin navigation shortcuts */}
                 <SidebarButton onClick={() => navigate('/admin/dashboard')}><FaArrowLeft /> Dashboard</SidebarButton>
                 <SidebarButton onClick={() => navigate('/admin/catalog-manage')}><FaEdit /> Manage Items</SidebarButton>
+
+                {/* Note: this simply navigates to /login (no token clearing here) */}
                 <SidebarButton onClick={() => navigate('/login')}><FaSignOutAlt /> Logout</SidebarButton>
               </Sidebar>
             </>
@@ -477,6 +503,7 @@ const CatalogForAdmin = () => {
 
           <CatalogGrid>
             <AnimatePresence>
+              {/* Loading / empty / populated states */}
               {loading && filteredProducts.length === 0 ? (
                 <p style={{ color: 'rgba(255,255,255,0.7)' }}>Loading catalog...</p>
               ) : filteredProducts.length === 0 ? (
@@ -485,6 +512,7 @@ const CatalogForAdmin = () => {
                 filteredProducts.map((product, idx) => (
                   <ProductCard
                     key={product.ProductID || idx}
+                    // Card entrance animation (staggered slightly by index)
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
@@ -499,9 +527,11 @@ const CatalogForAdmin = () => {
                       </ProductHeader>
                       <ProductDesc>{product.Description || 'No description'}</ProductDesc>
                       <ButtonGroup>
+                        {/* Goes to the admin CRUD screen (edit/add happens there) */}
                         <ActionButton onClick={() => navigate('/admin/catalog-manage')} style={{ flex: 1 }}>
                           Edit / Add <FaEdit />
                         </ActionButton>
+                        {/* Deletes this product */}
                         <DeleteButton onClick={() => handleDelete(product.ProductID)} title="Delete Product">
                           <FaTrash />
                         </DeleteButton>

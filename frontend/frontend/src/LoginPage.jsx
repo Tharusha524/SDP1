@@ -273,8 +273,10 @@ const Footer = styled.p`
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  // Controlled form state for email/password
   const [credentials, setCredentials] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
+  // UI/feedback state: server error, loading spinner, per-field validation, and touched flags
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState({ email: '', password: '' });
@@ -329,6 +331,7 @@ const LoginPage = () => {
       return;
     }
     
+    // Send credentials to backend; show loading while awaiting response
     setLoading(true);
 
     try {
@@ -416,7 +419,8 @@ const LoginPage = () => {
               <SubText>Sign in to your Marukawa account</SubText>
             </Header>
 
-            <Form onSubmit={handleLogin}>
+              {/* Login form: client-side validation then POST to /api/auth/login */}
+              <Form onSubmit={handleLogin}>
               <InputGroup>
                 <Label>Your Email</Label>
                 <InputWrapper>

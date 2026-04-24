@@ -1,11 +1,21 @@
+// Database pool used to run SQL queries.
 const db = require('../config/db');
+// Utility to create unique IDs for tasks and notifications.
 const { generateTaskId } = require('../utils/idGenerator');
 
+/*
+  Purpose: Dashboard statistics endpoint
+  - Returns summary numbers for admin dashboard such as total orders,
+    pending orders, revenue, pending tasks and inventory total.
+  - Also returns a short list of recent orders with line-item summaries.
+  - Used by the admin UI to show high-level system health and recent activity.
+*/
 // GET /api/admin/stats
 exports.getDashboardStats = async (req, res) => {
   try {
     const [[{ totalOrders }]] = await db.query('SELECT COUNT(*) AS totalOrders FROM orders');
     const [[{ pendingOrders }]] = await db.query("SELECT COUNT(*) AS pendingOrders FROM orders WHERE Status = 'Pending'");
+    const [[{ completedOrders }]] = await db.query("SELECT COUNT(*) AS completedOrders FROM orders WHERE Status = 'Completed'");
     const [[{ totalRevenue }]] = await db.query(`
       SELECT COALESCE(SUM(oi.Quantity * oi.UnitPriceAtPurchase), 0) AS totalRevenue
       FROM orders o
@@ -35,6 +45,7 @@ exports.getDashboardStats = async (req, res) => {
       stats: {
         totalOrders: Number(totalOrders),
         pendingOrders: Number(pendingOrders),
+        completedOrders: Number(completedOrders),
         totalRevenue: Number(totalRevenue),
         pendingTasks: Number(pendingTasks),
         activeInventory: Number(activeInventory)
@@ -51,6 +62,11 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Staff list endpoint
+  - Returns a simple list of staff members (id, name, contact, status).
+  - Used to display staff in admin screens where assignments are done.
+*/
 // GET /api/admin/staff
 exports.getAllStaff = async (req, res) => {
   try {
@@ -61,6 +77,11 @@ exports.getAllStaff = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Tasks list endpoint
+  - Returns all task rows with staff names and status.
+  - Used by admins to review and manage task assignments.
+*/
 // GET /api/admin/tasks
 exports.getAllTasks = async (req, res) => {
   try {
@@ -82,6 +103,12 @@ exports.getAllTasks = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Create a new task and assign it to a staff member
+  - Validates required fields, generates a TaskID, inserts the task,
+    and marks the staff member as 'Busy'.
+  - Used when admin assigns a work task related to an order.
+*/
 // POST /api/admin/tasks
 exports.createTask = async (req, res) => {
   const { staffId, description, orderId } = req.body;
@@ -105,6 +132,11 @@ exports.createTask = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Inventory listing endpoint
+  - Returns current inventory items, available quantities and thresholds.
+  - Used to display inventory status for admin/storeroom views.
+*/
 // GET /api/admin/inventory
 exports.getInventory = async (req, res) => {
   try {
@@ -123,6 +155,11 @@ exports.getInventory = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Orders report endpoint
+  - Returns orders along with payment and item summaries.
+  - Useful for exports, reporting, and detailed admin views.
+*/
 // GET /api/admin/reports/orders
 exports.getOrdersReport = async (req, res) => {
   try {
@@ -151,6 +188,11 @@ exports.getOrdersReport = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Inventory usage report
+  - Calculates how much of each inventory item was used in completed orders.
+  - Helps with stock analysis and restocking decisions.
+*/
 // GET /api/admin/reports/inventory-usage
 // Returns total allocated quantity per inventory item for Completed orders
 exports.getInventoryUsageReport = async (req, res) => {
@@ -177,6 +219,11 @@ exports.getInventoryUsageReport = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Customer-product preference report
+  - Shows how many unique customers bought each product and total quantity.
+  - Useful for marketing and assortment planning.
+*/
 // GET /api/admin/reports/customer-product-preferences
 // Returns how many distinct customers purchased each product (with product category) for Completed orders.
 exports.getCustomerProductPreferencesReport = async (req, res) => {
@@ -202,9 +249,16 @@ exports.getCustomerProductPreferencesReport = async (req, res) => {
   }
 };
 
+// Utilities for notifications and emails used when order status changes.
 const { generateNotificationId } = require('../utils/idGenerator');
 const { sendOrderStatusUpdateEmail } = require('../utils/emailService');
 
+/*
+  Purpose: Update order status endpoint
+  - Validates the requested status, updates orders table, then
+    creates in-app notification and sends an email to the customer if available.
+  - This keeps customers informed when admin updates an order's progress.
+*/
 // PATCH /api/admin/orders/:id/status
 exports.updateOrderStatus = async (req, res) => {
   const { status, estimatedCompletionDate } = req.body;

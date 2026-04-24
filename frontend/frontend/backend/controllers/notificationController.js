@@ -1,6 +1,16 @@
 const db = require('../config/db');
 
-// GET /api/notifications — returns notifications for the logged-in user
+// Notification controller
+// Purpose: provide basic notification retrieval and update endpoints used by
+// the frontend. Notifications are stored in the `notification` table. Handlers
+// below return notifications for the current user (or include global
+// low-stock alerts for admins), and allow marking single or all
+// notifications as read.
+
+// GET /api/notifications — return notifications for the logged-in user
+// Behavior: admins see their notifications plus global "Low Stock Alert"
+// entries (ReceiverID IS NULL). Regular users see only notifications addressed
+// to their user id.
 exports.getMyNotifications = async (req, res) => {
   try {
     const isAdmin = req.user && req.user.role === 'admin';
@@ -21,7 +31,10 @@ exports.getMyNotifications = async (req, res) => {
   }
 };
 
-// PATCH /api/notifications/:id/read — mark a notification as read
+// PATCH /api/notifications/:id/read — mark a single notification as read
+// Behavior: updates the `IsRead` flag for the given NotificationID. Admins
+// may mark their own notifications or global low-stock alerts; regular users
+// may mark only notifications addressed to them.
 exports.markAsRead = async (req, res) => {
   try {
     const isAdmin = req.user && req.user.role === 'admin';
@@ -38,7 +51,10 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// PATCH /api/notifications/read-all — mark all as read for this user
+// PATCH /api/notifications/read-all — mark all notifications as read
+// Behavior: sets `IsRead` = 1 for all notifications visible to the current
+// user. For admins this includes global low-stock alerts; for regular users
+// only notifications with their ReceiverID are updated.
 exports.markAllAsRead = async (req, res) => {
   try {
     const isAdmin = req.user && req.user.role === 'admin';

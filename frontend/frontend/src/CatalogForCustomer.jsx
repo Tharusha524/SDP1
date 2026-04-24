@@ -10,14 +10,6 @@ import img5 from './assets/Gemini_Generated_Image_elt1ngelt1ngelt1.png';
 import img7 from './assets/Gemini_Generated_Image_qoa691qoa691qoa6.png';
 import img8 from './assets/register-hero.png';
 
-/*
-  CatalogForCustomer.js
-  - Product catalog page for customers.
-  - Shows products from backend (fallback to static list if none).
-  - Supports: search, category filter, add-to-cart (localStorage), and cart badge.
-  - Note: placing multi-item orders is handled via Cart and PlaceOrder flows.
-*/
-
 // --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
@@ -460,10 +452,6 @@ const PRODUCTS = [
   }
 ];
 
-/**
- * CatalogForCustomer component
- * - Loads products and user info, shows product cards, and provides add-to-cart.
- */
 const CatalogForCustomer = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -500,7 +488,6 @@ const CatalogForCustomer = () => {
   }, []);
 
   const handleLogout = () => {
-    // Clear auth and client cart when user logs out
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('cart');
@@ -523,7 +510,6 @@ const CatalogForCustomer = () => {
   // (Order-now flow removed — use Add to Cart / Cart page to place multi-item orders)
 
   const addToCart = (product) => {
-    // Require login before adding to cart
     if (!user) { navigate('/login'); return; }
     try {
       const raw = localStorage.getItem('cart');
@@ -531,10 +517,8 @@ const CatalogForCustomer = () => {
       // default quantity 1
       const existingIndex = parsed.findIndex(i => i.productId === product.ProductID);
       if (existingIndex >= 0) {
-        // If item already in cart, increment quantity
         parsed[existingIndex].quantity = (parsed[existingIndex].quantity || 0) + 1;
       } else {
-        // Otherwise add as new line with qty 1
         parsed.push({ productId: product.ProductID, quantity: 1 });
       }
       localStorage.setItem('cart', JSON.stringify(parsed));

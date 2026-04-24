@@ -4,6 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FaPlus, FaEdit, FaTrash, FaCloudUploadAlt, FaSignOutAlt, FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 
+// Admin catalog CRUD screen.
+// - Fetches all products from the backend
+// - Lets admins add products (including image upload as a base64 data URL)
+// - Lets admins edit or permanently delete products
+// Note: this component assumes routing/auth is handled elsewhere; it uses the token
+// from localStorage when calling protected endpoints.
+
 // --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap');
@@ -39,7 +46,7 @@ const Header = styled.header`
     font-family: 'Playfair Display', serif;
     font-size: 2.5rem;
     letter-spacing: 2px;
-    color: #f3f4f6;
+    color: #d3d3d3;
   }
 `;
 
@@ -248,7 +255,7 @@ const Table = styled.table`
 
   thead {
     background-color: rgba(0,0,0,0.3);
-    color: #c0a062;
+    color: #ddb154;
   }
 
   th {
@@ -292,18 +299,30 @@ const ActionIconButton = styled.button`
 
 export default function CatalogManage() {
   const navigate = useNavigate();
+
+  // Product list displayed in the table below.
   const [products, setProducts] = useState([]);
+
+  // Form model for add/edit.
+  // `image` holds either a base64 data URL (after upload) or whatever the backend returned.
   const [formData, setFormData] = useState({ id: '', name: '', price: '', description: '', image: '' });
+
+  // Preview image shown in the form (data URL).
   const [preview, setPreview] = useState(null);
+
+  // When true, the form submits an update (PUT) instead of creating (POST).
   const [isEditing, setIsEditing] = useState(false);
+
+  // Shared loading flag used to disable inputs/buttons during network calls.
   const [loading, setLoading] = useState(false);
 
-  // Fetch products on component mount
+  // Initial load: fetch products once when the page mounts.
   useEffect(() => {
     console.log('🔄 CatalogManage component mounted - fetching products...');
     fetchProducts();
   }, []);
 
+  // Loads the latest product list from the backend.
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -324,11 +343,14 @@ export default function CatalogManage() {
     }
   };
 
+  // Controlled inputs: keep `formData` in sync with the form fields.
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Reads the selected image file into a base64 data URL.
+  // This data URL is stored in state and sent to the backend as `image`.
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -341,12 +363,15 @@ export default function CatalogManage() {
     }
   };
 
+  // Clears the form back to “add mode”.
   const resetForm = () => {
     setFormData({ id: '', name: '', price: '', description: '',  image: '' });
     setPreview(null);
     setIsEditing(false);
   };
 
+  // Creates a new product (POST /api/products).
+  // Performs client-side validation first, then refetches products on success.
   const handleAddProduct = async (e) => {
     e.preventDefault();
     const cleanName = String(formData.name || '').trim();
@@ -376,6 +401,7 @@ export default function CatalogManage() {
 
     setLoading(true);
     try {
+      // If the backend uses JWT auth, include the token when available.
       const token = localStorage.getItem('token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -424,6 +450,7 @@ export default function CatalogManage() {
   };
 
   const handleEditClick = (product) => {
+    // Populate the form from the selected row.
     setFormData({
       id: product.ProductID,
       name: product.Name,
@@ -432,11 +459,13 @@ export default function CatalogManage() {
       
       image: product.Image || ''
     });
+    // Use the existing image as the preview (may be a URL or data URL).
     setPreview(product.Image);
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Updates an existing product (PUT /api/products/:id).
   const handleUpdateProduct = async (e) => {
     e.preventDefault();
     const cleanName = String(formData.name || '').trim();
@@ -466,6 +495,7 @@ export default function CatalogManage() {
 
     setLoading(true);
     try {
+      // If the backend uses JWT auth, include the token when available.
       const token = localStorage.getItem('token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -497,6 +527,7 @@ export default function CatalogManage() {
     }
   };
 
+  // Permanently deletes a product (DELETE /api/products/:id), then refetches the list.
   const handleRemoveProduct = async (id) => {
     if (!window.confirm("⚠️ Are you sure you want to permanently delete this product?\n\nThis action cannot be undone and will remove the product from the database.")) return;
 
@@ -554,6 +585,7 @@ export default function CatalogManage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h2>{isEditing ? <FaEdit /> : <FaPlus />} {isEditing ? "Edit Product" : "Add New Product"}</h2>
+            {/* When editing, submit updates; otherwise, create a new product */}
             <Form onSubmit={isEditing ? handleUpdateProduct : handleAddProduct}>
               <FormGroup>
                 <label>Product Name</label>
@@ -595,6 +627,7 @@ export default function CatalogManage() {
 
               <UploadSection>
                 <label>Product Image</label>
+                {/* Show upload prompt until an image is selected, then show a preview */}
                 {!preview ? (
                   <CustomFileInput>
                     <FaCloudUploadAlt size={24} />
@@ -607,6 +640,7 @@ export default function CatalogManage() {
                     <Button
                       type="button"
                       variant="danger"
+                      // Remove selected image from the form.
                       onClick={() => { setPreview(null); setFormData(p => ({ ...p, image: '' })); }}
                       style={{ padding: '8px 12px' }}
                     >
@@ -666,6 +700,7 @@ export default function CatalogManage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Render states: initial loading, empty catalog, or product rows */}
                   {loading && products.length === 0 ? (
                     <tr>
                       <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255, 255, 255, 0.5)' }}>
@@ -690,6 +725,7 @@ export default function CatalogManage() {
                           <td><strong>#{product.ProductID}</strong></td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              {/* If the backend returns an image URL/data URL, show it as a small thumbnail */}
                               {product.Image && <img src={product.Image} alt={product.Name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />}
                               {product.Name}
                             </div>
@@ -698,9 +734,11 @@ export default function CatalogManage() {
                           <td style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.5)', maxWidth: '250px' }}>{product.Description || 'No description'}</td>
                           <td>
                             <TableActions>
+                              {/* Edit loads the row into the form above */}
                               <ActionIconButton onClick={() => handleEditClick(product)} disabled={loading} title="Edit">
                                 <FaEdit size={18} />
                               </ActionIconButton>
+                              {/* Remove calls DELETE on this product */}
                               <ActionIconButton variant="danger" onClick={() => handleRemoveProduct(product.ProductID)} disabled={loading} title="Remove">
                                 <FaTrash size={18} />
                               </ActionIconButton>

@@ -1,9 +1,12 @@
+// Database connection / query helper (MySQL pool wrapper)
 const db = require('../config/db');
 
-// GET /api/staff/tasks — tasks assigned to the logged-in staff member
+// GET /api/staff/tasks — return tasks assigned to the authenticated staff user
+// Loads recent tasks for the staff member and returns them as JSON.
 exports.getMyTasks = async (req, res) => {
   try {
     const staffId = req.user.id;
+    // Query tasks for this staff, most recent first
     const [tasks] = await db.query(`
       SELECT t.TaskID,
              t.Description,
@@ -16,22 +19,28 @@ exports.getMyTasks = async (req, res) => {
     `, [staffId]);
     res.json({ success: true, tasks });
   } catch (err) {
+    // Return 500 on unexpected DB errors
     res.status(500).json({ success: false, error: err.message });
   }
 };
 
 // PATCH /api/staff/tasks/:id/complete — mark a task as completed
+// Ensures the task belongs to the staff member, marks it completed and
+// updates the staff's availability status depending on remaining open tasks.
 exports.completeTask = async (req, res) => {
   try {
     const staffId = req.user.id;
+    // Mark the task completed if it is assigned to the current staff
     const [result] = await db.query(
       "UPDATE task SET Status = 'Completed', CompletedDate = NOW() WHERE TaskID = ? AND StaffID = ?",
       [req.params.id, staffId]
     );
     if (result.affectedRows === 0) {
+      // No rows updated -> task not found or not assigned to this user
       return res.status(404).json({ success: false, error: 'Task not found or not assigned to you' });
     }
 
+    // Recompute the staff workload: count open tasks to set status
     const [[{ openTasks }]] = await db.query(
       "SELECT COUNT(*) AS openTasks FROM task WHERE StaffID = ? AND Status IN ('Pending', 'In Progress')",
       [staffId]
@@ -45,6 +54,7 @@ exports.completeTask = async (req, res) => {
 
     res.json({ success: true, message: 'Task marked as completed' });
   } catch (err) {
+    // Unexpected DB error
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -53,13 +63,17 @@ const { generateNotificationId } = require('../utils/idGenerator');
 const { sendOrderStatusUpdateEmail } = require('../utils/emailService');
 
 // PATCH /api/staff/orders/:id/status — update an order's status (and optionally estimated date)
+// Validates the supplied status, updates the order row, then notifies the
+// customer via in-app notification and email (if available).
 exports.updateOrderStatus = async (req, res) => {
   const { status, estimatedCompletionDate } = req.body;
   const VALID_STATUSES = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
   if (!VALID_STATUSES.includes(status)) {
+    // Guard against invalid status values
     return res.status(400).json({ success: false, error: 'Invalid status. Use: Pending, In Progress, Completed, or Cancelled' });
   }
   try {
+    // Build dynamic SQL to optionally include estimated completion date
     let sql = 'UPDATE orders SET Status = ?, UpdatedAt = NOW()';
     const params = [status];
 
@@ -73,9 +87,11 @@ exports.updateOrderStatus = async (req, res) => {
 
     const [result] = await db.query(sql, params);
     if (result.affectedRows === 0) {
+      // Order not found
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
-    // Fetch customer user + order info for notification/email
+
+    // Load order + customer contact info to inform the customer
     const [[orderRow]] = await db.query(
                   `SELECT o.OrderID, o.CustomerID, o.Status, o.Details, o.EstimatedCompletionDate,
                     u.id AS UserID, u.email AS Email, COALESCE(c.Name, u.email) AS CustomerName
@@ -98,10 +114,11 @@ exports.updateOrderStatus = async (req, res) => {
           [notifId, message, orderRow.UserID, orderRow.OrderID]
         );
       } catch (e) {
+        // Log notification failures but don't block the request
         console.error('Failed to create customer order update notification:', e.message || e);
       }
 
-      // Email notification for customer
+      // Email notification for customer (best-effort)
       if (orderRow.Email) {
         try {
           await sendOrderStatusUpdateEmail({
@@ -120,6 +137,7 @@ exports.updateOrderStatus = async (req, res) => {
 
     res.json({ success: true, message: `Order ${req.params.id} updated to ${status}` });
   } catch (err) {
+    // Unexpected error
     res.status(500).json({ success: false, error: err.message });
   }
 };

@@ -1,3 +1,8 @@
+// Database connection setup
+// - purpose: configure and export a reusable MySQL connection pool
+// - notes: uses environment variables for credentials and host. The pool
+//   improves performance by reusing connections instead of opening a
+//   new socket for each request.
 const mysql = require('mysql2/promise');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -14,7 +19,7 @@ const pool = mysql.createPool({
   keepAliveInitialDelay: 0
 });
 
-// Test connection on startup
+// Quick connection test on startup: logs success or a concise error.
 (async () => {
   try {
     const connection = await pool.getConnection();
@@ -25,4 +30,5 @@ const pool = mysql.createPool({
   }
 })();
 
+// Export the pool for use by controllers and other backend modules
 module.exports = pool;

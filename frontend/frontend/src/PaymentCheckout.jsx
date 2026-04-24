@@ -4,6 +4,12 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 import { FaLock, FaArrowLeft } from "react-icons/fa";
 
+// Payment checkout page
+// - Receives order/session details via `location.state` from the place-order flow
+// - Shows the 40% advance amount and builds a server-backed PayHere initiation
+// - Submits a hidden HTML form to the PayHere URL returned by the backend
+// Notes: this page does not itself call PayHere SDK; it posts form fields as required by PayHere.
+
 const Page = styled.div`
   min-height: 100vh;
   background: #020617;
@@ -100,7 +106,7 @@ const Divider = styled.div`
 const HelperText = styled.div`
   margin-top: 8px;
   font-size: 0.78rem;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(184, 161, 148, 0.9);
 `;
 
 
@@ -208,18 +214,23 @@ function PaymentCheckout() {
   
 
   const handlePayHere = async () => {
+    // Reset any previous error
     setError(null);
+
+    // Guard: ensure we have the required session data passed from place-order
     if (!hasState) {
       setError("Payment session has expired. Please start again.");
       return;
     }
 
+    // Require authentication token for backend call
     const token = localStorage.getItem("token");
     if (!token) {
       navigate("/login");
       return;
     }
 
+    // Request a PayHere initiation from backend which returns a target URL and params
     setSubmitting(true);
     try {
       const resp = await fetch("http://localhost:5000/api/payments/payhere-init", {
@@ -245,7 +256,8 @@ function PaymentCheckout() {
         return;
       }
 
-      // Build and submit form to PayHere (POST)
+      // Build and submit a hidden HTML form to perform a POST redirect to PayHere
+      // (this keeps POST semantics and allows sending many required fields)
       const form = document.createElement("form");
       form.method = "POST";
       form.action = payhereUrl;
@@ -261,6 +273,7 @@ function PaymentCheckout() {
 
       document.body.appendChild(form);
       form.submit();
+      // Note: the page will navigate away to PayHere; no further client-side cleanup required here
     } catch (e) {
       console.error("PayHere init error:", e);
       setError("Network error. Could not start PayHere.");

@@ -1,15 +1,22 @@
+// Import React and UI libraries used to build this page
 import React from 'react';
+// styled-components for styles, createGlobalStyle for global CSS
 import styled, { createGlobalStyle } from 'styled-components';
+// framer-motion for small animations in the UI
 import { motion } from 'framer-motion';
+// useNavigate lets us go back to catalog when user clicks back
 import { useNavigate } from 'react-router-dom';
+// Small icon set used in the values section
 import { FaArrowLeft, FaAward, FaUsers, FaLeaf, FaGem } from 'react-icons/fa';
+// Hero image shown on the About page
 import heroImage from './assets/WhatsApp Image 2026-01-26 at 09.43.45.jpeg';
 
+// Global page styles: background, font and base colors
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
 
   body {
-    background: radial-gradient(circle at top left, #1a1a1a, #0d0d0d);
+    background: radial-gradient(circle at top left, #1a1a1a, #060606);
     color: #f3f4f6;
     font-family: 'Manrope', sans-serif;
     margin: 0;
@@ -18,6 +25,7 @@ const GlobalStyle = createGlobalStyle`
   }
 `;
 
+// Page container that centers content and sets max width
 const Container = styled.div`
   min-height: 100vh;
   padding: 60px 5%;
@@ -25,13 +33,14 @@ const Container = styled.div`
   margin: 0 auto;
 `;
 
+// Back button UI: returns user to catalog
 const BackButton = styled(motion.button)`
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 24px;
-  background: rgba(192, 160, 98, 0.1);
-  border: 1px solid rgba(192, 160, 98, 0.3);
+  background: rgba(137, 102, 30, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
   color: #c0a062;
   font-size: 0.95rem;
@@ -42,16 +51,18 @@ const BackButton = styled(motion.button)`
 
   &:hover {
     background: rgba(192, 160, 98, 0.2);
-    border-color: #c0a062;
+    border-color: #c4a961;
     transform: translateX(-5px);
   }
 `;
 
+// Hero area: main title, subtitle and hero image
 const Hero = styled(motion.div)`
   text-align: center;
   margin-bottom: 60px;
 `;
 
+// Page title style shown at top of the page
 const Title = styled.h1`
   font-family: 'Playfair Display', serif;
   font-size: 3.5rem;
@@ -60,6 +71,7 @@ const Title = styled.h1`
   font-weight: 700;
 `;
 
+// Short subtitle text under the title that explains the brand
 const Subtitle = styled.p`
   font-size: 1.2rem;
   color: rgba(255, 255, 255, 0.7);
@@ -68,6 +80,7 @@ const Subtitle = styled.p`
   line-height: 1.6;
 `;
 
+// Wrapper for the hero image with rounded corners and shadow
 const HeroImageWrapper = styled(motion.div)`
   width: 100%;
   max-width: 900px;
@@ -78,6 +91,7 @@ const HeroImageWrapper = styled(motion.div)`
   border: 2px solid rgba(192, 160, 98, 0.2);
 `;
 
+// The hero image element that displays the product photo
 const HeroImage = styled.img`
   width: 100%;
   height: auto;
@@ -85,10 +99,12 @@ const HeroImage = styled.img`
   object-fit: cover;
 `;
 
+// Generic section block used for story, values, and mission
 const Section = styled(motion.section)`
   margin-bottom: 60px;
 `;
 
+// Section title style (e.g., "Our Story", "Our Values")
 const SectionTitle = styled.h2`
   font-family: 'Playfair Display', serif;
   font-size: 2rem;
@@ -107,6 +123,7 @@ const SectionTitle = styled.h2`
   }
 `;
 
+// Paragraph text style used inside each section
 const ContentText = styled.p`
   font-size: 1.1rem;
   line-height: 1.8;
@@ -114,6 +131,7 @@ const ContentText = styled.p`
   margin-bottom: 20px;
 `;
 
+// Grid layout for the values cards shown in "Our Values"
 const ValuesGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -121,6 +139,7 @@ const ValuesGrid = styled.div`
   margin-top: 40px;
 `;
 
+// Card style for each value (icon, title, short description)
 const ValueCard = styled(motion.div)`
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -136,12 +155,14 @@ const ValueCard = styled(motion.div)`
   }
 `;
 
+// Wrapper that shows the icon for each value
 const IconWrapper = styled.div`
   font-size: 3rem;
-  color: #c0a062;
+  color: #d0ae69;
   margin-bottom: 20px;
 `;
 
+// Small title inside each value card
 const ValueTitle = styled.h3`
   font-size: 1.3rem;
   color: #f3f4f6;
@@ -149,15 +170,19 @@ const ValueTitle = styled.h3`
   font-weight: 600;
 `;
 
+// Short description text inside each value card
 const ValueDesc = styled.p`
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.6);
   line-height: 1.6;
 `;
 
+// Main About page component: builds the UI and handles navigation
 const AboutUs = () => {
+  // Hook to move between pages (used by the back button)
   const navigate = useNavigate();
 
+  // Data for the "Our Values" cards shown in the UI
   const values = [
     {
       icon: <FaAward />,
@@ -181,10 +206,13 @@ const AboutUs = () => {
     }
   ];
 
+  // Render the page UI
   return (
     <>
+      {/* Apply global styles for background and fonts */}
       <GlobalStyle />
       <Container>
+        {/* Back button: takes user back to catalog */}
         <BackButton
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -193,6 +221,7 @@ const AboutUs = () => {
           <FaArrowLeft /> Back to Catalog
         </BackButton>
 
+        {/* HERO: main title, subtitle and picture that introduce the brand */}
         <Hero
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -202,6 +231,7 @@ const AboutUs = () => {
           <Subtitle>
             Pioneering innovative cement-based products with creativity and patented craftsmanship
           </Subtitle>
+          {/* Big image showing the brand or product */}
           <HeroImageWrapper
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -211,6 +241,7 @@ const AboutUs = () => {
           </HeroImageWrapper>
         </Hero>
 
+        {/* OUR STORY: short paragraphs telling visitors about the company */}
         <Section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -231,6 +262,7 @@ const AboutUs = () => {
           </ContentText>
         </Section>
 
+        {/* OUR VALUES: grid of cards that show the company's values with icons */}
         <Section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -245,14 +277,18 @@ const AboutUs = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + index * 0.1 }}
               >
+                {/* Icon for the value (visual cue) */}
                 <IconWrapper>{value.icon}</IconWrapper>
+                {/* Short title for the value */}
                 <ValueTitle>{value.title}</ValueTitle>
+                {/* Short description for the value */}
                 <ValueDesc>{value.desc}</ValueDesc>
               </ValueCard>
             ))}
           </ValuesGrid>
         </Section>
 
+        {/* OUR MISSION: one paragraph about the company's goals */}
         <Section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

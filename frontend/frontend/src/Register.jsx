@@ -319,6 +319,9 @@ const Register = () => {
   const validateField = (name, value) => {
     let errorMsg = '';
 
+    // Validate a single form field and update `validationErrors` state.
+    // Returns true when the field is valid, false otherwise.
+
     switch (name) {
       case 'name':
         if (!value.trim()) {
@@ -371,12 +374,16 @@ const Register = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Update form data on user input. If the field was already interacted with
+    // (`touched`), re-run validation so the error message updates live.
     if (touched[name]) {
       validateField(name, value);
     }
   };
 
   const handleBlur = (name) => {
+    // Mark the field as touched (used to control when to show errors)
+    // and validate its current value when the user leaves the input.
     setTouched(prev => ({ ...prev, [name]: true }));
     validateField(name, formData[name]);
   };
@@ -385,6 +392,8 @@ const Register = () => {
     e.preventDefault();
     setError('');
 
+    // Final submission flow: validate all fields, show errors if any,
+    // then POST the registration payload to the backend.
     // Validate all fields
     const nameValid = validateField('name', formData.name);
     const emailValid = validateField('email', formData.email);
@@ -407,6 +416,7 @@ const Register = () => {
     setLoading(true);
 
     try {
+      // Send registration to backend and parse the JSON response.
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
         headers: {

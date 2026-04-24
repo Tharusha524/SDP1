@@ -11,6 +11,12 @@ const SALT_ROUNDS = 10; // Standard bcrypt salt rounds for password hashing
 const JWT_SECRET = process.env.JWT_SECRET || 'marukawa-cement-secret-key-2026';
 const JWT_EXPIRY = '7d'; // Token expires in 7 days
 
+/*
+  Purpose: Login handler
+  - Purpose: check user credentials and return a JWT token on success.
+  - Notes: supports bcrypt-hashed and legacy plain-text passwords.
+  - Uses: called when a user submits the login form.
+*/
 // Handles authentication logic
 exports.login = async (req, res) => {
   const { email, password } = req.body;
@@ -93,6 +99,13 @@ exports.login = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Register (start) handler
+  - Purpose: accept registration details, save them as a pending
+    registration, generate a verification OTP, and email it to user.
+  - Notes: does not create the real user yet; waits for OTP verification.
+  - Uses: called when a new user signs up.
+*/
 exports.register = async (req, res) => {
   const { name, email, contact, password, role } = req.body;
   try {
@@ -157,11 +170,22 @@ exports.register = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Token verification placeholder
+  - Purpose: (placeholder) endpoint to verify tokens if implemented.
+*/
 exports.verifyToken = (req, res) => {
   // Implement token verification logic
   res.send('Verify token endpoint');
 };
 
+/*
+  Purpose: Verify OTP endpoint
+  - Purpose: check the OTP sent to the user's email and finalize
+    the registration by creating the real user record.
+  - Notes: accepts OTP for both pending registrations and fallbacks
+    from users table (for some legacy flows).
+*/
 // Verify OTP endpoint
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
@@ -254,6 +278,11 @@ exports.verifyOTP = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Resend OTP
+  - Purpose: generate and email a new OTP for registration verification.
+  - Notes: updates pending registration or users table depending on state.
+*/
 // Resend OTP endpoint
 exports.resendOTP = async (req, res) => {
   const { email } = req.body;
@@ -319,6 +348,11 @@ exports.resendOTP = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Forgot password start
+  - Purpose: generate a password reset OTP and email it to the user.
+  - Notes: does not reveal whether an email exists for privacy reasons.
+*/
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   try {
@@ -358,6 +392,11 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Verify reset OTP
+  - Purpose: check the OTP sent for password reset and allow the
+    user to proceed to set a new password.
+*/
 // Verify password reset OTP
 exports.verifyResetOTP = async (req, res) => {
   const { email, otp } = req.body;
@@ -389,6 +428,11 @@ exports.verifyResetOTP = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Reset password
+  - Purpose: after OTP verification, hash the new password and store it.
+  - Notes: enforces password complexity before saving.
+*/
 // Reset password with verified OTP
 exports.resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
@@ -435,6 +479,12 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+/*
+  Purpose: Debug helper (development only)
+  - Purpose: return pending registration or user verification info
+    to help during development and testing.
+  - Notes: do not expose this in production.
+*/
 // Debug helper: return pending registration or users verification info (development use only)
 exports.debugPending = async (req, res) => {
   const email = req.query.email;

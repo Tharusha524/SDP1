@@ -1,9 +1,14 @@
+// Simple per-user dashboard: role-aware landing page with static tiles (no API calls)
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard({ user, setUser }) {
+  // `user`: authenticated user object (e.g. { name, role })
+  // `setUser`: callback to update user in app-level state (used to clear on logout)
+  // Shows simple role-aware tiles for quick actions; no API calls here.
   const navigate = useNavigate();
 
   const handleLogout = () => {
+    // Clear session storage and update app state, then go to login
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('cart');

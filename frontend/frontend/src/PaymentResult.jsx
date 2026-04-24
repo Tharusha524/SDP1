@@ -4,6 +4,12 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 
+// Payment result page
+// - Reads `success` prop and `orderId` query param to show the payment outcome
+// - If payment succeeded and an orderId exists, it attempts to finalize/save the order
+//   by calling `POST /api/payments/finalize` (requires JWT token)
+// - Shows status, provider, and next-steps with primary/secondary CTAs
+
 const Page = styled.div`
   min-height: 100vh;
   display: flex;
@@ -165,12 +171,16 @@ const PaymentResult = ({ success }) => {
   }, [success, finalizing]);
 
   useEffect(() => {
+    // If payment was successful and an orderId is present, attempt to persist the
+    // order server-side so it becomes visible in order history. This is a best-effort
+    // network call; UI still treats payment as successful even if finalize fails.
     const runFinalize = async () => {
       if (!success || !orderId) return;
 
       setFinalizeError(null);
       setFinalizing(true);
 
+      // Require authentication token to finalize the order
       const token = localStorage.getItem('token');
       if (!token) {
         setFinalizing(false);
@@ -190,6 +200,7 @@ const PaymentResult = ({ success }) => {
 
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.success) {
+          // Keep a user-visible message but do not block the success UI
           setFinalizeError(data.error || 'Could not save the order to the database.');
           setFinalizing(false);
           return;

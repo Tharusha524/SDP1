@@ -4,6 +4,10 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaPhone, FaEnvelope, FaMapMarkerAlt, FaClock } from 'react-icons/fa';
 
+// Contact info page (customer-facing).
+// This is a static page (no API calls) that shows company contact details
+// and provides a “Back to Catalog” navigation button.
+
 const GlobalStyle = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
 
@@ -144,10 +148,14 @@ const InfoText = styled.p`
 const ContactUs = () => {
   const navigate = useNavigate();
 
+  // Simple navigate helper used by the back button.
+
   return (
     <>
+      {/* Global theme/background for this page */}
       <GlobalStyle />
       <Container>
+        {/* Back navigation to the customer catalog route */}
         <BackButton
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -156,6 +164,7 @@ const ContactUs = () => {
           <FaArrowLeft /> Back to Catalog
         </BackButton>
 
+        {/* Header/intro section */}
         <Hero
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -168,6 +177,7 @@ const ContactUs = () => {
         </Hero>
 
         <ContentGrid>
+          {/* Main contact details (phone/email/address/hours) */}
           <InfoSection
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -175,6 +185,7 @@ const ContactUs = () => {
           >
             <SectionTitle>Contact Information</SectionTitle>
             
+            {/* Phone numbers */}
             <InfoItem>
               <IconWrapper><FaPhone /></IconWrapper>
               <InfoContent>
@@ -184,6 +195,7 @@ const ContactUs = () => {
               </InfoContent>
             </InfoItem>
 
+            {/* Email addresses */}
             <InfoItem>
               <IconWrapper><FaEnvelope /></IconWrapper>
               <InfoContent>
@@ -193,6 +205,7 @@ const ContactUs = () => {
               </InfoContent>
             </InfoItem>
 
+            {/* Physical location */}
             <InfoItem>
               <IconWrapper><FaMapMarkerAlt /></IconWrapper>
               <InfoContent>
@@ -206,6 +219,7 @@ const ContactUs = () => {
               </InfoContent>
             </InfoItem>
 
+            {/* Opening hours */}
             <InfoItem>
               <IconWrapper><FaClock /></IconWrapper>
               <InfoContent>

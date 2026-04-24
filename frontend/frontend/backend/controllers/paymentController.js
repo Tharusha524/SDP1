@@ -4,7 +4,11 @@ const { generateOrderId, generateOrderItemId, generatePaymentId } = require('../
 
 const MAX_ORDER_QUANTITY = 50;
 
+// Maximum quantity allowed per single product in an order to avoid accidental bulk orders.
+
 const normalizeOrderItems = (body) => {
+  // Normalize incoming order payload into a compact array of { productId, quantity }
+  // - Accepts either `items: [{productId, quantity}]` or single `productId`+`quantity` fields.
   const rawItems = Array.isArray(body?.items) ? body.items : [];
   const fallbackProductId = body?.productId;
   const fallbackQuantity = Number(body?.quantity);
@@ -69,6 +73,10 @@ const ensurePayherePendingTable = async (queryable) => {
   }
 };
 
+// Ensure there is a lightweight table to store pending PayHere sessions.
+// The table holds a temporary snapshot of the intended order so the final
+// `orders` and `payment` rows can be created after PayHere confirms payment.
+
 // POST /api/payments/payhere-init
 // Creates a PayHere sandbox payment session for 40% advance.
 // IMPORTANT: This step MUST NOT create the order/orderitem/payment rows.
@@ -78,11 +86,13 @@ exports.payhereInit = async (req, res) => {
   try {
     const user = req.user;
 
+    // Guard: only authenticated customers may create payment sessions
     if (!user || user.role !== 'customer') {
       return res.status(403).json({ success: false, error: 'Only customers can place orders' });
     }
 
     const { details } = req.body || {};
+    // Normalize and validate the items supplied by the frontend
     const normalized = normalizeOrderItems(req.body);
 
     if (normalized.error) {
@@ -97,6 +107,7 @@ exports.payhereInit = async (req, res) => {
     const productIds = items.map((item) => item.productId);
     const placeholders = productIds.map(() => '?').join(',');
 
+    // Verify all referenced products exist and read their price for the line items
     const [products] = await db.query(
       `SELECT ProductID, Name, Price FROM product WHERE ProductID IN (${placeholders})`,
       productIds
@@ -174,7 +185,9 @@ exports.payhereInit = async (req, res) => {
     const currency = 'LKR';
     const firstItem = lineItems[0];
 
-    // Store pending session in DB (used later by /api/payments/finalize)
+    // Persist a pending payment session: this is a temporary snapshot used by
+    // the frontend's payment-success flow to finalize the real order and
+    // payment rows once PayHere confirms the transaction.
     await ensurePayherePendingTable(db);
     await db.query(
       `INSERT INTO payhere_pending
@@ -273,7 +286,9 @@ exports.payhereReturn = async (req, res) => {
       return res.redirect(`${frontendBase}/payment-failed`);
     }
 
-    // Mark pending session as paid (if we have an order id)
+    // Helper: mark the pending session Paid=1. This ensures notify_url calls
+    // (server-to-server) or return_url redirects both mark the session as paid
+    // so the frontend can later finalize the DB inserts.
     const markPaidIfPossible = async (oid) => {
       if (!oid) return;
       try {
@@ -289,8 +304,9 @@ exports.payhereReturn = async (req, res) => {
 
     await markPaidIfPossible(order_id_from_query);
 
-    // If PayHere didn't send custom_1 (common in browser return), just redirect
-    // using order_id. The frontend success page will finalize the DB insert.
+    // If PayHere didn't send our `custom_1` token (browser return), redirect
+    // using the order_id. The frontend will call `/api/payments/finalize` to
+    // create the persistent order/payment rows after confirming the session.
     if (!custom_1) {
       if (order_id_from_query) {
         return res.redirect(`${frontendBase}/payment-success?orderId=${encodeURIComponent(order_id_from_query)}`);
@@ -312,7 +328,8 @@ exports.payhereReturn = async (req, res) => {
     await markPaidIfPossible(orderId);
 
     // Success: redirect to the frontend success UI. That UI will call /finalize
-    // to create the order/payment rows in the database.
+    // to create the order/payment rows in the database using the stored
+    // payhere_pending snapshot.
     return res.redirect(`${frontendBase}/payment-success?orderId=${encodeURIComponent(orderId)}`);
   } catch (err) {
     console.error('Error handling PayHere return:', err);
@@ -357,6 +374,7 @@ exports.cardDirectPayment = async (req, res) => {
     }
 
     const productById = new Map(products.map((product) => [product.ProductID, product]));
+    // Build the final line-items with resolved unit prices from DB
     const lineItems = items.map((item) => {
       const product = productById.get(item.productId);
       return {
@@ -372,6 +390,10 @@ exports.cardDirectPayment = async (req, res) => {
     );
     const advanceAmount = Number((totalPrice * 0.4).toFixed(2));
 
+
+    // Create order and payment records inside a transaction so the DB state
+    // remains consistent if any step fails. This flow simulates a successful
+    // card charge by directly inserting a PAID payment row.
     conn = await db.getConnection();
     await conn.beginTransaction();
 
@@ -471,6 +493,10 @@ exports.finalizeOrder = async (req, res) => {
       await conn.rollback();
       return res.status(400).json({ success: false, error: 'Pending payment items are invalid' });
     }
+
+    // Persist the actual `orders`, `orderitem`, and `payment` rows from the
+    // snapshot stored in `payhere_pending`. This endpoint is intentionally
+    // idempotent: if the order already exists we simply return success.
 
     if (!Array.isArray(pendingItems) || !pendingItems.length) {
       await conn.rollback();
